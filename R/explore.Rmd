@@ -1,0 +1,128 @@
+---
+title: "ch 1 fishN: data exploration"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: true
+    theme: cosmo
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(dplyr)
+require(stringr)
+require(ggplot2)
+require(patchwork)
+```
+
+Initial pilot checks and data exploration for comparing fish assemblage observation results from underwater visual census, remote underwater video MaxN counts, and abundance estimates from **Random encounter staying time (REST) modelling**.
+
+### Targets to keep in mind
+
+* Check species overlap between cameras, but this might not be an issue
+* Check occurrence replicates per species per site, bc *power*.
+* Check overlaps with UVC species
+* Check species accumulation curves
+* Occurrence staying time distributions (check asymmetry for distribution function selections)
+
+## Some overall tallies {.tabset}
+
+Checking and exploring some overall counts and tallies for the RUV data, aggregated by site and species. Species especially important because rarer species with fewer occurrences will have lower replicates/sample size for the REST model.
+
+### Site
+
+Total number of fish occurrences, total distinct species, total camera tallies.
+
+```{r RUV tallies, site}
+data_ruv %>% group_by(site_ID) %>% 
+  summarise(totobs = sum(Count),  # observations
+            totsp = n_distinct(Taxon), # species
+            cameras = n_distinct(Camera)
+            )
+```
+
+### Species
+
+```{r RUV tallies, species}
+data_ruv %>% group_by(Taxon) %>% 
+  summarise(totobs = sum(Count), # counts bc some observation records have mult individuals
+            sizeclasses = n_distinct(Size_class), # number of size classes
+            cameras = n_distinct(Camera) # number of cameras appeared in
+            ) %>% arrange(desc(totobs)) # arrange by most prevalent species
+```
+
+Camera names are unique to site-camera, so the species with camera tally at 7 appear in all sites in all cameras. Only 7 species occur in all cameras. 
+
+## Species overlap between sites
+
+``` {r Site assemblages}
+
+kaku <- data_ruv %>% filter(site_ID == 'hale_kaku') %>% select(Camera, Taxon)
+kinalea <- data_ruv %>% filter(site_ID == 'hale_kinalea') %>% select(Camera, Taxon)
+
+kaku %>% distinct(Taxon) %>% filter(Taxon %in% kinalea$Taxon)
+# 27 species occur in both sites
+
+# species exclusive to Hale Kaku: 10
+kaku %>% distinct(Taxon) %>% filter(!Taxon %in% kinalea$Taxon)
+
+# species exclusive to Hale Kinalea: 6
+kinalea %>% distinct(Taxon) %>% filter(!Taxon %in% kaku$Taxon)
+
+```
+
+``` {r Species cameras}
+# number of cameras each species appeared in
+# remember Hale Kaku had one camera failure, so its max = 3
+kaku %>% group_by(Taxon) %>% 
+  summarise(cameras = n_distinct(Camera)) %>% arrange(desc(cameras))
+kinalea %>% group_by(Taxon) %>% 
+  summarise(cameras = n_distinct(Camera)) %>% arrange(desc(cameras))
+
+# number of species per camera
+kaku %>% group_by(Camera) %>% summarise(totsp = n_distinct(Taxon))
+kinalea %>% group_by(Camera) %>% summarise(totsp = n_distinct(Taxon))
+
+```
+Interesting camera-wise differences in Hale Kinalea. The deep camera at the start of the transect is an outlier compared to the other three.
+
+## Species replicate numbers
+
+``` {r Species replicates, message = F}
+
+# Total observations per species per site
+sp_reps <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(Count)) %>% ungroup
+
+sp_reps %>% arrange(desc(occurrences)) %>% head(20) # view top 20
+
+# plot the replicates per species for each site
+# Hale Kaku first
+reps.kaku <- ggplot(data = sp_reps %>% filter(site_ID == 'hale_kaku')) +
+  geom_col(aes(x = reorder(Taxon, -occurrences), y = occurrences), fill = 'grey70') +
+  theme_classic(base_size = 13) + 
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank()) +
+  scale_y_log10() + labs(title = "Hale Kaku", 
+                         subtitle = paste0(sp_reps %>% filter(occurrences < 10, site_ID == 'hale_kaku') %>% nrow, ' species with < 10 occurrences'))
+# Hale Kinalea
+reps.kinalea <- ggplot(data = sp_reps %>% filter(site_ID == 'hale_kinalea')) +
+  geom_col(aes(x = reorder(Taxon, -occurrences), y = occurrences), fill = 'grey70') +
+  theme_classic(base_size = 13) + 
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank()) +
+  scale_y_log10() + labs(title = "Hale Kinalea", 
+                         subtitle = paste0(sp_reps %>% filter(occurrences < 10, site_ID == 'hale_kinalea') %>% nrow, ' species with < 10 occurrences'))
+
+reps.kaku + reps.kinalea
+
+```
+
+## Accumulation curves
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
