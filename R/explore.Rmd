@@ -7,11 +7,12 @@ output:
       collapsed: true
     theme: cosmo
     highlighter: tango
-
+    df_print: paged
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
 require(dplyr)
 require(stringr)
 require(ggplot2)
@@ -27,11 +28,11 @@ Initial pilot checks and data exploration for comparing fish assemblage observat
 
 ### Targets to keep in mind
 
-* Check species overlap between cameras, but this might not be an issue
-* Check occurrence replicates per species per site, bc *power*.
-* Check overlaps with UVC species
-* Check species accumulation curves
-* Occurrence staying time distributions (check asymmetry for distribution function selections)
+-   Check species overlap between cameras, but this might not be an issue
+-   Check occurrence replicates per species per site, bc *power*.
+-   Check overlaps with UVC species
+-   Check species accumulation curves
+-   Occurrence staying time distributions (check asymmetry for distribution function selections)
 
 ## Some overall tallies {.tabset}
 
@@ -59,11 +60,11 @@ data_ruv %>% group_by(Taxon) %>%
             ) %>% arrange(desc(totobs)) # arrange by most prevalent species
 ```
 
-Camera names are unique to site-camera, so the species with camera tally at 7 appear in all sites in all cameras. Only 7 species occur in all cameras. 
+Camera names are unique to site-camera, so the species with camera tally at 7 appear in all sites in all cameras. Only 7 species occur in all cameras.
 
 ## Species overlap between sites
 
-``` {r Site assemblages}
+```{r Site assemblages}
 
 kaku <- data_ruv %>% filter(site_ID == 'hale_kaku') %>% select(Camera, Taxon)
 kinalea <- data_ruv %>% filter(site_ID == 'hale_kinalea') %>% select(Camera, Taxon)
@@ -79,7 +80,7 @@ kinalea %>% distinct(Taxon) %>% filter(!Taxon %in% kaku$Taxon)
 
 ```
 
-``` {r Species cameras}
+```{r Species cameras}
 # number of cameras each species appeared in
 # remember Hale Kaku had one camera failure, so its max = 3
 kaku %>% group_by(Taxon) %>% 
@@ -92,11 +93,12 @@ kaku %>% group_by(Camera) %>% summarise(totsp = n_distinct(Taxon))
 kinalea %>% group_by(Camera) %>% summarise(totsp = n_distinct(Taxon))
 
 ```
+
 Interesting camera-wise differences in Hale Kinalea. The deep camera at the start of the transect is an outlier compared to the other three.
 
 ## Species replicate numbers
 
-``` {r Species replicates, message = F, echo = F}
+```{r Species replicates, message = F, echo = F}
 
 # Total observations per species per site
 sp_reps <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(Count)) %>% ungroup
@@ -125,12 +127,11 @@ reps.kaku + reps.kinalea
 
 Still a pretty steep/skewed distribution with the log scale, so the number of occurrences/sample size per species without accounting for staying time is super heterogeneous. Dominated by damselfish, of course.
 
-## Distribution checks: staying time (*T<sub>ij</sub>*)
+## Distribution checks: staying time (*T*<sub>ij</sub>)
 
-The model uses maximum likelihood estimation to estimate expected staying times, which would follow either a gamma or exponential probability distribution. What do the raw data look like in terms of the distribution shape?
-This is the duration/staying time for every camera *i* and every detection *j*
+The model uses maximum likelihood estimation to estimate expected staying times, which would follow either a gamma or exponential probability distribution. What do the raw data look like in terms of the distribution shape? This is the duration/staying time for every camera *i* and every detection *j*
 
-``` {r Staying time distributions, site, warning = F, message = F}
+```{r Staying time distributions, site, warning = F, message = F}
 
 # convert this to a lubridate duration data type
 data_ruv$entrytime_c <- ms(data_ruv$Time_entry) %>% as.duration
@@ -154,7 +155,7 @@ ggplot(data = data_ruv) +
 
 Given the shape of these two distributions and it's center at 1, I'd pick a gamma distribution over an exponential distribution for the model estimating expected staying time. But, this is only aggregated at the site level. Let's see the distributions for the top 15 occurring species.
 
-``` {r Staying time distributions, species-site, warning = F, message = F, echo = F}
+```{r Staying time distributions, species-site, warning = F, message = F, echo = F}
 # top 15 occurring species
 top_kaku <- sp_reps %>% arrange(desc(occurrences)) %>% 
   filter(site_ID == 'hale_kaku') %>% top_n(15) %>% pull(Taxon)
@@ -173,13 +174,13 @@ ggplot(data = data_ruv %>% filter(Taxon %in% top_kaku, site_ID == 'hale_kinalea'
 
 ```
 
-## Distribution checks: detections/occurrences (*Y*)
+## Distribution checks: detections/occurrences (*Y<sub>i</sub>*)
 
 Detections and occurrences follow a discrete distribution like Poisson or negative binomial because it's kind of like presence absence count data. Poisson would probably be good enough unless the data is overdispersed, but that's not something we can visually check without fitting models. Not like staying time, this is just number of detections per camera which we already tallied above.
 
-Seems to fit a Poisson 
+Seems to fit a Poisson
 
-``` {r Detection per camera distribution, warning = F, message = F}
+```{r Detection per camera distribution, warning = F, message = F}
 
 # assume a detection is per individual every time they enter the video screen
 sp_decs <- data_ruv %>% group_by(Taxon, Camera, site_ID) %>% summarise(occurrences = sum(Count))
@@ -200,6 +201,9 @@ ggplot(data = sp_decs %>% filter(site_ID == 'hale_kinalea')) +
 ## Accumulation curves, TBD
 
 ```{r SAC, message = F, warning = F, eval = F}
+
+## SAC data set up and prep
+
 data_ruv <- data_ruv %>% arrange(site_ID, Camera, VidFile, entrytime_c)
 #  timestamps are by video but we want them to be timestamps relative to total observation time, not video time.
 cameras <- data_ruv %>% distinct(site_ID, Camera, VidFile)
@@ -212,8 +216,120 @@ seq <- seq[-1] # trim that dummy start
 
 cameras$VidSeq <- seq
 
-data_ruv <- left_join(data_ruv, cameras, by=c('Site', 'Camera', 'VidFile'))
+data_ruv <- left_join(data_ruv, cameras, by=c('site_ID', 'Camera', 'VidFile'))
 data_ruv$VidSeq <- as.numeric(data_ruv$VidSeq)
 
-```
+# make the timestamps relative to site and not video file
+# all videos duration = 11:48 except for deep_0 = 17:42
+for (i in 2:5) {
+  # loop for each video file in order(1-4 or 5) add a multiple of the video file length
+  # 2:5 because the first files don't need fixing
+  # for the 11:48 videos
+  data_ruv$SACentry[data_ruv$VidSeq == i & data_ruv$Camera != 'deep_0'] <- data_ruv$entrytime_c[data_ruv$VidSeq == i & data_ruv$Camera != 'deep_0'] + (i-1)*(dminutes(11) + dseconds(48))
+  # for deep_0 17:42 videos
+  data_ruv$SACentry[data_ruv$VidSeq == i & data_ruv$Camera == 'deep_0'] <- data_ruv$entrytime_c[data_ruv$VidSeq == i & data_ruv$Camera == 'deep_0'] + (i-1)*(dminutes(17) + dseconds(42))
+}
 
+# just put the time stamps in for first video files
+data_ruv$SACentry[data_ruv$VidSeq == 1] <- data_ruv$entrytime_c[data_ruv$VidSeq == 1]
+data_ruv$VidSeq <- NULL # get rid of these dummy objects
+rm(cameras, ncam, seq)
+
+## Calculate cumulative species richness over time
+# make a dataframe to populate species accumulation per timestamp
+SAC <- data_ruv %>% select(site_ID, Camera, SACentry) # matches the row index of data_ruv
+
+# make the SAC times relative to the time of first observation
+for (i in 1:7) {
+  time1 <- SAC$SACentry[which(SAC$Camera == unique(SAC$Camera)[i])[1]]
+  for (j in which(SAC$Camera == unique(SAC$Camera)[i])) {
+    SAC$SACentry[j] <- SAC$SACentry[j] - time1 # take every time stamp and subtract time1 from it
+  }
+}
+rm(time1)
+
+# for every row at every site-camera, calculate the species number accumulation through time
+for (i in 1:7) {
+  for (j in which(SAC$Camera == unique(SAC$Camera)[i])) {
+    if (j == which(SAC$Camera == unique(SAC$Camera)[i])[1]) { # the first row from each site represents the first species record, so these will always start at 1
+      SAC$spN[j] <- 1
+    }
+    else {
+      SAC$spN[j] <- data_ruv$Taxon[which(data_ruv$Camera == unique(data_ruv$Camera)[i])[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
+    }
+  }
+}
+
+## See raw SACs
+ggplot() +
+  theme_classic(base_size=13) +
+  geom_line(data = SAC, aes(x = SACentry, y = spN, color = Camera), size=0.5, shape=21, alpha=0.5) +
+  labs(x='Observation (s)', y='Cumulative number of species observed') +
+  theme(axis.line = element_line(size=0.2)) +
+  scale_color_cherulean(palette = "gomphosus", discrete = T) +
+  coord_cartesian(ylim=c(0,35), xlim = c(0,2700))
+
+
+## Model SACs by site-camera
+require(nlstools)
+SAC_curve <- as.list(rep(0,7)) # info to fill with asymptotic non linear models
+SAC_pred <- as.list(rep(0,7)) # object to fill with confidence interval info
+set.seed(24)
+for (i in 1:7) {
+  # model fitting
+  SAC_curve[[i]] <- nls(formula = spN ~ a - (a-b) * exp(-c* SACentry), 
+                        data = SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
+                        start = list(a=20, b=0.2, c=0.01))
+}
+
+# errors for everything 4+, so try power curve
+# a = scaling factor
+# b = exponent rate
+i = 4
+  SAC_curve[[i]] <- nls(formula = spN ~ a + b * log(SACentry), 
+                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
+                  start = list(a = 1, b = 0.1))
+  
+i = 5
+  SAC_curve[[i]] <- nls(formula = spN ~ a * SACentry ^ b, 
+                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
+                  start = list(a = 0.01, b = 1))
+  
+i = 6
+  SAC_curve[[i]] <- nls(formula = spN ~ a * SACentry ^ b, 
+                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
+                  start = list(a = 0.01, b = 1))
+  
+i = 7
+  SAC_curve[[i]] <- nls(formula = spN ~ a * SACentry ^ b, 
+                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
+                  start = list(a = 0.01, b = 1))
+  
+# predict confidence intervals
+for (i in 1:7) {
+  SAC_pred[[i]] <- nlsBootPredict(nlsBoot(SAC_curve[[i]], niter=500), 
+                                  newdata = data.frame(SACentry = seq(0, 2700, length.out = length(which(SAC$Camera == unique(SAC$Camera)[i])))), 
+                                  interval = "confidence") %>% as.data.frame
+  colnames(SAC_pred[[i]])[2:3] <- c('lwr', 'upr')
+}
+
+## Plot SACs
+
+plot_SACs <- ggplot() +
+  theme_classic(base_size=13) +
+  labs(x='Observation (s)', y='Cumulative number of species observed') +
+  theme(axis.line = element_line(size=0.2)) +
+  scale_color_cherulean(palette = "gomphosus", discrete = T) +
+  coord_cartesian(ylim=c(0,35), xlim = c(0,2700))
+
+palette = cherulean_palettes[['gomphosus']]
+for (i in 1:7) {
+ plot_SACs <- plot_SACs +
+    geom_ribbon(data=SAC_pred[[i]] %>% bind_cols(., SACentry = SAC$SACentry[which(SAC$Camera == unique(SAC$Camera)[i])]), 
+                aes(ymin=lwr, ymax=upr, x=SACentry), fill=palette[i], alpha=0.2) +
+    geom_line(data=data.frame(x=SAC$SACentry[which(SAC$Camera == unique(SAC$Camera)[i])], y=SAC_pred[[i]][,1]), aes(x, y), color=palette[i], size=0.5)
+}
+  
+plot_SACs
+
+```
