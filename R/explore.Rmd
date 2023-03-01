@@ -6,6 +6,7 @@ output:
     toc_float:
       collapsed: true
     theme: cosmo
+    highlighter: tango
 
 ---
 
@@ -15,6 +16,11 @@ require(dplyr)
 require(stringr)
 require(ggplot2)
 require(patchwork)
+require(lubridate)
+# custom palettes to be extra
+source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/899dcfc1745421cb4e6ba26826b0bfe55fd8ec14/cherulean.R')
+
+data_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
 ```
 
 Initial pilot checks and data exploration for comparing fish assemblage observation results from underwater visual census, remote underwater video MaxN counts, and abundance estimates from **Random encounter staying time (REST) modelling**.
@@ -90,7 +96,7 @@ Interesting camera-wise differences in Hale Kinalea. The deep camera at the star
 
 ## Species replicate numbers
 
-``` {r Species replicates, message = F}
+``` {r Species replicates, message = F, echo = F}
 
 # Total observations per species per site
 sp_reps <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(Count)) %>% ungroup
@@ -117,12 +123,97 @@ reps.kaku + reps.kinalea
 
 ```
 
-## Accumulation curves
+Still a pretty steep/skewed distribution with the log scale, so the number of occurrences/sample size per species without accounting for staying time is super heterogeneous. Dominated by damselfish, of course.
 
-You can also embed plots, for example:
+## Distribution checks: staying time (*T<sub>ij</sub>*)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+The model uses maximum likelihood estimation to estimate expected staying times, which would follow either a gamma or exponential probability distribution. What do the raw data look like in terms of the distribution shape?
+This is the duration/staying time for every camera *i* and every detection *j*
+
+``` {r Staying time distributions, site, warning = F, message = F}
+
+# convert this to a lubridate duration data type
+data_ruv$entrytime_c <- ms(data_ruv$Time_entry) %>% as.duration
+data_ruv$exittime_c <- ms(data_ruv$Time_exit) %>% as.duration
+data_ruv$staytime <- with(data_ruv, exittime_c - entrytime_c) # just get staying time duration
+
+ggplot(data = data_ruv) +
+  geom_density(aes(x = staytime, group = site_ID, color = site_ID), alpha = 0.5) +
+  theme_classic(base_size = 13) + labs(x = "Staying time (s)") +
+  scale_color_cherulean(palette = 'gomphosus', discrete = T)
+
+# just for ease of looking at the differences, but this is super consistent!
+ggplot(data = data_ruv) +
+  geom_density(aes(x = staytime, group = site_ID, fill = site_ID, color = site_ID), alpha = 0.3) +
+  theme_classic(base_size = 13) + labs(x = "Staying time (s)") +
+  scale_x_log10() +
+  scale_fill_cherulean(palette = 'gomphosus', discrete = T) +
+  scale_color_cherulean(palette = 'gomphosus', discrete = T)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Given the shape of these two distributions and it's center at 1, I'd pick a gamma distribution over an exponential distribution for the model estimating expected staying time. But, this is only aggregated at the site level. Let's see the distributions for the top 15 occurring species.
+
+``` {r Staying time distributions, species-site, warning = F, message = F, echo = F}
+# top 15 occurring species
+top_kaku <- sp_reps %>% arrange(desc(occurrences)) %>% 
+  filter(site_ID == 'hale_kaku') %>% top_n(15) %>% pull(Taxon)
+top_kinalea <- sp_reps %>% arrange(desc(occurrences)) %>% 
+  filter(site_ID == 'hale_kinalea') %>% top_n(15) %>% pull(Taxon)
+
+ggplot(data = data_ruv %>% filter(Taxon %in% top_kaku, site_ID == 'hale_kaku')) +
+  geom_density(aes(x = staytime, group = Taxon, color = Taxon), size = 0.5) +
+  theme_classic(base_size = 13) + labs(x = "Staying time (s)", title = "Hale Kaku", subtitle = "Staying time distributions for top 15 occurring species") +
+  scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
+
+ggplot(data = data_ruv %>% filter(Taxon %in% top_kaku, site_ID == 'hale_kinalea')) +
+  geom_density(aes(x = staytime, group = Taxon, color = Taxon), size = 0.5) +
+  theme_classic(base_size = 13) + labs(x = "Staying time (s)", title = "Hale Kinalea", subtitle = "Staying time distributions for top 15 occurring species") +
+  scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
+
+```
+
+## Distribution checks: detections/occurrences (*Y*)
+
+Detections and occurrences follow a discrete distribution like Poisson or negative binomial because it's kind of like presence absence count data. Poisson would probably be good enough unless the data is overdispersed, but that's not something we can visually check without fitting models. Not like staying time, this is just number of detections per camera which we already tallied above.
+
+Seems to fit a Poisson 
+
+``` {r Detection per camera distribution, warning = F, message = F}
+
+# assume a detection is per individual every time they enter the video screen
+sp_decs <- data_ruv %>% group_by(Taxon, Camera, site_ID) %>% summarise(occurrences = sum(Count))
+head(sp_decs, 10)
+
+ggplot(data = sp_decs %>% filter(site_ID == 'hale_kaku')) +
+  geom_density(aes(x = occurrences, group = Taxon, color = Taxon), size = 0.5) +
+  theme_classic(base_size = 13) + labs(x = "Number of occurrences", title = "Hale Kaku", subtitle = "Number of occurrences distribution") +
+  scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
+
+ggplot(data = sp_decs %>% filter(site_ID == 'hale_kinalea')) +
+  geom_density(aes(x = occurrences, group = Taxon, color = Taxon), size = 0.5) +
+  theme_classic(base_size = 13) + labs(x = "Number of occurrences", title = "Hale Kinalea", subtitle = "Number of occurrences distribution") +
+  scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
+
+```
+
+## Accumulation curves, TBD
+
+```{r SAC, message = F, warning = F, eval = F}
+data_ruv <- data_ruv %>% arrange(site_ID, Camera, VidFile, entrytime_c)
+#  timestamps are by video but we want them to be timestamps relative to total observation time, not video time.
+cameras <- data_ruv %>% distinct(site_ID, Camera, VidFile)
+ncam <- cameras %>% group_by(site_ID, Camera) %>% summarise(ncam = n_distinct(VidFile)) %>% pull(ncam)
+seq <- ''
+  for (i in 1:length(ncam)) {
+    seq <- c(seq, 1:ncam[i])
+  } # generate a sequence vector to identify the nominal order of video files
+seq <- seq[-1] # trim that dummy start
+
+cameras$VidSeq <- seq
+
+data_ruv <- left_join(data_ruv, cameras, by=c('Site', 'Camera', 'VidFile'))
+data_ruv$VidSeq <- as.numeric(data_ruv$VidSeq)
+
+```
+
