@@ -198,9 +198,11 @@ ggplot(data = sp_decs %>% filter(site_ID == 'hale_kinalea')) +
 
 ```
 
-## Accumulation curves, TBD
+## Accumulation curves
 
-```{r SAC, message = F, warning = F, eval = F}
+Not sure why some cameras have such an odd saturation pattern when we split by cameras, but that may be an artefact of the camera placement adding to noise? Site-wise saturation holds up though!
+
+```{r SAC, message = F, warning = F, eval = T}
 
 ## SAC data set up and prep
 
@@ -263,14 +265,71 @@ for (i in 1:7) {
 ## See raw SACs
 ggplot() +
   theme_classic(base_size=13) +
-  geom_line(data = SAC, aes(x = SACentry, y = spN, color = Camera), size=0.5, shape=21, alpha=0.5) +
-  labs(x='Observation (s)', y='Cumulative number of species observed') +
+  geom_point(data = SAC, aes(x = SACentry, y = spN, color = Camera), size=0.5, shape = 21, alpha=0.2) +
+  labs(x='Observation (s)', y='Cumulative number of species observed', title = "SAC by cameras") +
   theme(axis.line = element_line(size=0.2)) +
   scale_color_cherulean(palette = "gomphosus", discrete = T) +
   coord_cartesian(ylim=c(0,35), xlim = c(0,2700))
 
+# check by site
+ggplot() +
+  theme_classic(base_size=13) +
+  geom_point(data = SAC, aes(x = SACentry, y = spN, color = site_ID), size=0.5, shape = 21, alpha=0.2) +
+  labs(x='Observation (s)', y='Cumulative number of species observed', title = "SAC for sites") +
+  theme(axis.line = element_line(size=0.2)) +
+  scale_color_cherulean(palette = "gomphosus", discrete = T) +
+  coord_cartesian(ylim=c(0,35), xlim = c(0,2700))
 
-## Model SACs by site-camera
+```
+
+Try fitting proper nonlinear regression models for the saturation curves
+
+``` {r SAC modelling for sites}
+
+require(nlstools)
+SAC_curve <- as.list(rep(0,2)) # info to fill with asymptotic non linear models
+SAC_pred <- as.list(rep(0,2)) # object to fill with confidence interval info
+set.seed(24)
+for (i in 1:2) {
+  # model fitting
+  SAC_curve[[i]] <- nls(formula = spN ~ a - (a-b) * exp(-c* SACentry), 
+                        data = SAC %>% filter(site_ID == unique(SAC$site_ID)[i]), 
+                        start = list(a=20, b=0.7, c=0.001))
+}
+
+for (i in 1:2) {
+  SAC_pred[[i]] <- nlsBootPredict(nlsBoot(SAC_curve[[i]], niter=500), 
+                                  newdata = data.frame(SACentry = seq(0, 2700, length.out = sum((SAC$site_ID == unique(SAC$site_ID)[i])+0))), 
+                                  interval = "confidence") %>% as.data.frame
+  colnames(SAC_pred[[i]])[2:3] <- c('lwr', 'upr')
+  SAC_pred[[i]]$SACentry <- seq(0, 2700, length.out = sum((SAC$site_ID == unique(SAC$site_ID)[i])+0))
+}
+
+plot_SACs <- ggplot() +
+  theme_classic(base_size=13) +
+  labs(x='Observation (s)', y='Cumulative number of species observed') +
+  geom_point(data = SAC, aes(x = SACentry, y = spN, color = site_ID), size=0.5, shape = 21, alpha=0.2) +
+  theme(axis.line = element_line(size=0.2)) +
+  scale_color_cherulean(palette = "gomphosus", discrete = T) +
+  coord_cartesian(ylim=c(0,35), xlim = c(0,2700))
+
+palette = cherulean_palettes[['gomphosus']][c(2,7)]
+for (i in 1:2) {
+ plot_SACs <- plot_SACs +
+    geom_ribbon(data = SAC_pred[[i]], aes(ymin=lwr, ymax=upr, x=SACentry), 
+                fill=palette[i], alpha=0.2) +
+    geom_line(data = SAC_pred[[i]], aes(x = SACentry, y = Median), color=palette[i], size=0.5)
+}
+  
+plot_SACs
+
+
+```
+
+
+
+``` {r SAC modelling for site-cameras, error = T, warning = F, message = F}
+
 require(nlstools)
 SAC_curve <- as.list(rep(0,7)) # info to fill with asymptotic non linear models
 SAC_pred <- as.list(rep(0,7)) # object to fill with confidence interval info
@@ -278,58 +337,35 @@ set.seed(24)
 for (i in 1:7) {
   # model fitting
   SAC_curve[[i]] <- nls(formula = spN ~ a - (a-b) * exp(-c* SACentry), 
-                        data = SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
-                        start = list(a=20, b=0.2, c=0.01))
+                        data = SAC %>% filter(Camera == unique(SAC$Camera)[i]), 
+                        start = list(a=15, b=0.7, c=0.0005))
 }
 
-# errors for everything 4+, so try power curve
-# a = scaling factor
-# b = exponent rate
-i = 4
-  SAC_curve[[i]] <- nls(formula = spN ~ a + b * log(SACentry), 
-                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
-                  start = list(a = 1, b = 0.1))
-  
-i = 5
-  SAC_curve[[i]] <- nls(formula = spN ~ a * SACentry ^ b, 
-                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
-                  start = list(a = 0.01, b = 1))
-  
-i = 6
-  SAC_curve[[i]] <- nls(formula = spN ~ a * SACentry ^ b, 
-                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
-                  start = list(a = 0.01, b = 1))
-  
-i = 7
-  SAC_curve[[i]] <- nls(formula = spN ~ a * SACentry ^ b, 
-                  data=SAC[which(SAC$Camera == unique(SAC$Camera)[i]),] %>% as.data.frame(), 
-                  start = list(a = 0.01, b = 1))
-  
-# predict confidence intervals
-for (i in 1:7) {
+# only camera 7 didn't converge
+
+for (i in 1:6) {
   SAC_pred[[i]] <- nlsBootPredict(nlsBoot(SAC_curve[[i]], niter=500), 
-                                  newdata = data.frame(SACentry = seq(0, 2700, length.out = length(which(SAC$Camera == unique(SAC$Camera)[i])))), 
+                                  newdata = data.frame(SACentry = seq(0, 2700, length.out = sum((SAC$Camera == unique(SAC$Camera)[i])+0))), 
                                   interval = "confidence") %>% as.data.frame
   colnames(SAC_pred[[i]])[2:3] <- c('lwr', 'upr')
+  SAC_pred[[i]]$SACentry <- seq(0, 2700, length.out = sum((SAC$Camera == unique(SAC$Camera)[i])+0))
 }
-
-## Plot SACs
 
 plot_SACs <- ggplot() +
   theme_classic(base_size=13) +
-  labs(x='Observation (s)', y='Cumulative number of species observed') +
+  labs(x='Observation time (s)', y='Cumulative species richness', title = "SACs by camera") +
+  geom_point(data = SAC, aes(x = SACentry, y = spN, shape = site_ID), size=1, alpha=0.5, color = 'grey75') +
   theme(axis.line = element_line(size=0.2)) +
-  scale_color_cherulean(palette = "gomphosus", discrete = T) +
   coord_cartesian(ylim=c(0,35), xlim = c(0,2700))
 
-palette = cherulean_palettes[['gomphosus']]
-for (i in 1:7) {
+for (i in 1:6) {
  plot_SACs <- plot_SACs +
-    geom_ribbon(data=SAC_pred[[i]] %>% bind_cols(., SACentry = SAC$SACentry[which(SAC$Camera == unique(SAC$Camera)[i])]), 
-                aes(ymin=lwr, ymax=upr, x=SACentry), fill=palette[i], alpha=0.2) +
-    geom_line(data=data.frame(x=SAC$SACentry[which(SAC$Camera == unique(SAC$Camera)[i])], y=SAC_pred[[i]][,1]), aes(x, y), color=palette[i], size=0.5)
+    geom_ribbon(data = SAC_pred[[i]], aes(ymin=lwr, ymax=upr, x=SACentry), 
+                fill=palette[i], alpha=0.2) +
+    geom_line(data = SAC_pred[[i]], aes(x = SACentry, y = Median), linetype=ifelse(unique(SAC$Camera)[i] %in% unique(kaku$Camera), 'solid', 'longdash'), size=0.5, color = 'black')
 }
   
 plot_SACs
+
 
 ```

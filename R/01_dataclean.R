@@ -1,6 +1,6 @@
 
-## FishN: random encounter staying time model test
-# data prep + explore. clean and standardise RUV and UVC fish data
+## FishN: comparing fish assemblage abundance surveying methods
+# data prep: clean and standardise RUV and UVC fish data
 # not meant to be run as part of the analysis pipeline
 
 require(dplyr)
