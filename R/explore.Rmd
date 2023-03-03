@@ -369,3 +369,40 @@ plot_SACs
 
 
 ```
+
+## Species abundance distributions
+
+Let's look at the SADs for the two sites, get a sense for potential patterns between the detections and species abundances. SADs per site but also per camera
+
+``` {r SADs}
+
+# aggregate data so that each row is a species with the right nestedness
+dt_SAD_site <- sp_decs %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(occurrences))
+
+dt_SAD_camera <- sp_decs %>% group_by(site_ID, Camera, Taxon) %>% summarise(occurrences = sum(occurrences))
+
+ggplot(data = dt_SAD_site) +
+  geom_density(aes(x = occurrences, color = site_ID)) +
+  theme_classic(base_size = 13) + 
+  labs(x = "Abundance classes", y = "Relative number of species",
+       title = "SADs by site")
+
+ggplot(data = dt_SAD_camera) +
+  geom_density(aes(x = occurrences, color = Camera)) +
+  theme_classic(base_size = 13) + 
+  labs(x = "Abundance classes", y = "Relative number of species",
+       title = "SADs by camera")
+
+ggplot(data = dt_SAD_site) +
+  geom_density(aes(x = occurrences, color = site_ID)) +
+  theme_classic(base_size = 13) + scale_x_log10() +
+  labs(x = "Abundance classes", y = "Relative number of species",
+       title = "SADs by site", subtitle = "log-transformed")
+
+ggplot(data = dt_SAD_camera) +
+  geom_density(aes(x = occurrences, color = Camera)) +
+  theme_classic(base_size = 13) + scale_x_log10() +
+  labs(x = "Abundance classes", y = "Relative number of species",
+       title = "SADs by camera", subtitle = "log-transformed")
+
+```
