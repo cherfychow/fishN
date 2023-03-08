@@ -84,8 +84,21 @@ for (i in 1:length(restsp)) {
     output_poisson$D <- (output_poisson$shapeET*output_poisson$lambdaEY / (2700 * 4 * cams[s]))*250 # scale to be density within belt transect
   }
 }
+# remove temp objects
+rm(detects, i, n, s, sp, stay, Tij, x)
 
+notNA <- which(is.na(output_poisson$D) == F) # reference vector for which species with valid Hessian matrices
+output_poisson_hess[notNA]
+notNA <- notNA[-which(notNA == 6)] # get rid of 6, all zeroes
 
+output_poisson$ET_SE <- NA
+output_poisson$EY_SE <- NA
+for (i in 1:length(notNA)) {
+  se <- tryCatch(sqrt(diag(solve(output_poisson_hess[[notNA[i]]]))), error = function(e) e)
+  if(inherits(se, "error")) next
+  output_poisson[notNA[i],6:7] <- se
+}
+purrr::map(output_poisson_hess[notNA], function(x) {sqrt(diag(solve(x)))})
 
 # interpret outputs
 # gamma shape = mean = E(T)
