@@ -156,21 +156,18 @@ ggplot(data = data_ruv) +
 Given the shape of these two distributions and it's center at 1, I'd pick a gamma distribution over an exponential distribution for the model estimating expected staying time. But, this is only aggregated at the site level. Let's see the distributions for the top 15 occurring species.
 
 ```{r Staying time distributions, species-site, warning = F, message = F, echo = F}
-# top 15 occurring species
-top_kaku <- sp_reps %>% arrange(desc(occurrences)) %>% 
-  filter(site_ID == 'hale_kaku') %>% top_n(15) %>% pull(Taxon)
-top_kinalea <- sp_reps %>% arrange(desc(occurrences)) %>% 
-  filter(site_ID == 'hale_kinalea') %>% top_n(15) %>% pull(Taxon)
 
-ggplot(data = data_ruv %>% filter(Taxon %in% top_kaku, site_ID == 'hale_kaku')) +
+tij_1 <- ggplot(data = data_ruv %>% filter(site_ID == 'hale_kaku')) +
   geom_density(aes(x = staytime, group = Taxon, color = Taxon), size = 0.5) +
-  theme_classic(base_size = 13) + labs(x = "Staying time (s)", title = "Hale Kaku", subtitle = "Staying time distributions for top 15 occurring species") +
+  theme_classic(base_size = 13) + labs(x = "Staying time (s)", title = "Hale Kaku") +
   scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
 
-ggplot(data = data_ruv %>% filter(Taxon %in% top_kaku, site_ID == 'hale_kinalea')) +
+tij_2 <- ggplot(data = data_ruv %>% filter(site_ID == 'hale_kinalea')) +
   geom_density(aes(x = staytime, group = Taxon, color = Taxon), size = 0.5) +
-  theme_classic(base_size = 13) + labs(x = "Staying time (s)", title = "Hale Kinalea", subtitle = "Staying time distributions for top 15 occurring species") +
+  theme_classic(base_size = 13) + labs(x = "Staying time (s)", title = "Hale Kinalea") +
   scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
+
+tij_1 + tij_2
 
 ```
 
@@ -186,15 +183,17 @@ Seems to fit a Poisson
 sp_decs <- data_ruv %>% group_by(Taxon, Camera, site_ID) %>% summarise(occurrences = sum(Count))
 head(sp_decs, 10)
 
-ggplot(data = sp_decs %>% filter(site_ID == 'hale_kaku')) +
+Y1 <- ggplot(data = sp_decs %>% filter(site_ID == 'hale_kaku')) +
   geom_density(aes(x = occurrences, group = Taxon, color = Taxon), size = 0.5) +
-  theme_classic(base_size = 13) + labs(x = "Number of occurrences", title = "Hale Kaku", subtitle = "Number of occurrences distribution") +
+  theme_classic(base_size = 13) + labs(x = "Number of occurrences", title = "Hale Kaku") +
   scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
 
-ggplot(data = sp_decs %>% filter(site_ID == 'hale_kinalea')) +
+Y2 <- ggplot(data = sp_decs %>% filter(site_ID == 'hale_kinalea')) +
   geom_density(aes(x = occurrences, group = Taxon, color = Taxon), size = 0.5) +
-  theme_classic(base_size = 13) + labs(x = "Number of occurrences", title = "Hale Kinalea", subtitle = "Number of occurrences distribution") +
+  theme_classic(base_size = 13) + labs(x = "Number of occurrences", title = "Hale Kinalea") +
   scale_color_cherulean(palette = 'gomphosus', discrete = T, alpha = 0.5) + guides(color = 'none')
+
+Y1 + Y2
 
 ```
 
@@ -384,25 +383,25 @@ dt_SAD_camera <- sp_decs %>% group_by(site_ID, Camera, Taxon) %>% summarise(occu
 ggplot(data = dt_SAD_site) +
   geom_density(aes(x = occurrences, color = site_ID)) +
   theme_classic(base_size = 13) + 
-  labs(x = "Abundance classes", y = "Relative number of species",
+  labs(x = "Occurrence classes", y = "Relative number of species",
        title = "SADs by site")
 
 ggplot(data = dt_SAD_camera) +
   geom_density(aes(x = occurrences, color = Camera)) +
   theme_classic(base_size = 13) + 
-  labs(x = "Abundance classes", y = "Relative number of species",
+  labs(x = "Occurrence classes", y = "Relative number of species",
        title = "SADs by camera")
 
 ggplot(data = dt_SAD_site) +
   geom_density(aes(x = occurrences, color = site_ID)) +
   theme_classic(base_size = 13) + scale_x_log10() +
-  labs(x = "Abundance classes", y = "Relative number of species",
+  labs(x = "Occurrence classes", y = "Relative number of species",
        title = "SADs by site", subtitle = "log-transformed")
 
 ggplot(data = dt_SAD_camera) +
   geom_density(aes(x = occurrences, color = Camera)) +
   theme_classic(base_size = 13) + scale_x_log10() +
-  labs(x = "Abundance classes", y = "Relative number of species",
+  labs(x = "Occurrence classes", y = "Relative number of species",
        title = "SADs by camera", subtitle = "log-transformed")
 
 ```

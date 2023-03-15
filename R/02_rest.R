@@ -226,29 +226,45 @@ for (i in 1:length(notNA2)) {
   output_poisson[notNA2[i],c(7,9)] <- se
 }
 
-# no change to these species, filter out. everyone else can use MaxN
-output_poisson <- output_poisson %>% filter(is.na(shape_var) == F)
-
-# calculate SE of D
-
-# var(TY) = var(T) * var(Y) + var(T) * EY^2 + var(Y) * ET^2
-# SE of D = sqrt(var(TY))
-# treat sH as constant scaling factors (units of measurement)
-# for staying time, because it's a gamma distribution, E(T) = shape * scale
-output_poisson$D_SE <- with(output_poisson, ET_SE*EY_SE + ET_SE*lambdaY^2 + EY_SE*(shapeT*scaleT)^2)
-# scale to line up the same "units"
-output_poisson$D_SE[output_poisson$site_ID == 'hale_kaku'] <- (output_poisson$D_SE[output_poisson$site_ID == 'hale_kaku'] / (2700 * 4 * 3)) * 250
-output_poisson$D_SE[output_poisson$site_ID == 'hale_kinalea'] <- (output_poisson$D_SE[output_poisson$site_ID == 'hale_kinalea'] / (2700 * 4 * 4)) * 250
-
 # interpret outputs
 # gamma shape = mean = E(T) expected staying time
 # poisson lambda = mean = variance = E(Y) expected number of detections
 
+# BOOTSTRAP CONFIDENCE INTERVALS
 
-## Try negative binomial instead of poisson
+# make empty lists to store bootstrapping per species
+bootTY <- as.list(rep(0,nrow(output_poisson)))
+# empty dataframe to store the estimated confidence interval bounds
+Dpredict <- matrix(nrow = nrow(output_poisson), ncol = 3)
+colnames(Dpredict) <- c('pred', 'lwr', 'upr')
+set.seed(240) # reproducibility :)
+for (i in 1:nrow(output_poisson)) {
+  bootTY[[i]] <- matrix(nrow = 1000, ncol = 3) # empty matrix for each bootstrap iteration
+  colnames(bootTY[[i]]) <- c('predT', 'predY', 'predD')
+  
+  # loop for bootstrap iterations per REST model
+  # pick out random T and Y from model estimated distribution parameters
+  for (j in 1:1000) {
+    bootTY[[i]][j,1] <-  rgamma(1, shape = output_poisson$shapeT[i], scale = output_poisson$scaleT[i])
+    bootTY[[i]][j,2] <-  rpois(1, lambda = output_poisson$lambdaY[i])
+  }
+  
+  # calculate D from the sampled T and Y parameters
+  if (output_poisson$site_ID[i] == 'hale_kaku') { # account for camera number differences
+    bootTY[[i]][,3] = (bootTY[[i]][,1] * bootTY[[i]][,2] / (2700 * 4 * 3)) * 250
+  } else {bootTY[[i]][,3] = (bootTY[[i]][,1] * bootTY[[i]][,2] / (2700 * 4 * 4)) * 250}
+  
+  # calculate the predicted values from each bootstrap
+  bootTY[[i]] <- bootTY[[i]] %>% as_tibble %>% arrange(predD) %>% as.matrix # arrange predicted values in ascending order
+  Dpredict[i,1] <- mean(bootTY[[i]][,3])
+  Dpredict[i,2] <- bootTY[[i]][25,3] # because we arranged it, the 25 = the point of 2.5%
+  Dpredict[i,3] <- bootTY[[i]][975,3] # 975 = 97.5
+}
 
-
-
+# produce final output
+output_poisson <- bind_cols(output_poisson, Dpredict)
+final_poisson <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
+  filter(occurrences >= 10) %>% select(!occurrences) %>% inner_join(., output_poisson, by=c("site_ID", "Taxon"))
 
 # export outputs
-write.csv(output_poisson, "../outputs/REST_poisson.csv", row.names = F)
+write.csv(final_poisson, "../outputs/REST_poisson.csv", row.names = F)
