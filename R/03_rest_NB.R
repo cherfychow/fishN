@@ -1,7 +1,8 @@
 
 
 ## FishN: comparing fish assemblage abundance surveying methods
-# REST: random encounter staying time modelling (no individual recognition)
+# REST: random encounter staying time modelling (no individual recognition), neg binomial version
+# + model comparisons with models fit with Poisson
 
 # set up working environment
 require(dplyr)
@@ -29,35 +30,31 @@ restsp <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(
   filter(occurrences >= 10) %>% pull(Taxon) %>% sort %>% unique
 
 # establish the likelihood function
-# Poisson for estimating expected detections
+# Neg binomial for estimating expected detections
 # Gamma for estimating expected staying time
 # requires inputs
 # y = vector of detections per camera i
 # t = dataframe or matrix of staying times per detection j for camera i, with staying times as rows, cameras in columns
 # n = number of cameras
 
-# Poisson needs lambda = mean = variance
+# Neg binomial needs mu = mean, size = dispersion parameter
 # Gamma needs shape = mean, scale = ratio between variance and mean. Set scale = 1 by default. 
 
-output_poisson <- data.frame(site_ID = rep(unique(data_ruv$site_ID), length(restsp)),
-                             Taxon = rep(restsp, each = 2), 
-                             shapeT = NA, scaleT = NA, lambdaY = NA)
-output_poisson_hess <- as.list(rep(0, length(restsp)*2))
+output_nb <- data.frame(site_ID = rep(c('hale_kaku', 'hale_kinalea'), length(restsp)), Taxon = rep(restsp, each = 2), shapeT = '', scaleT = '', muY = '', sizeY = '')
+output_nb_hess <- as.list(rep(0, length(restsp)*2))
 
 # NEST LEVELS: species-site-camera-detection
-
+set.seed(240) # replicability
 for (i in 1:length(restsp)) {
   
   for (s in 1:sites) {
-    
-    set.seed(240) # replicability
     # vector of detections per camera i at site
     detects <- data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[s], Taxon == restsp[i]) %>% 
       group_by(Camera) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
       pull(detects)
     
     # Establish MLE likelihood function
-    REST_poisson <- function(par) { # where x is a vector c(gamma shape, poisson lambda)
+    REST_nb <- function(par) { # where x is a vector c(gamma shape, poisson lambda)
       Tij <- rep(0,cams[s])
       for (n in 1:cams[s]) {
         # make a data object for staying time per site-camera
@@ -65,22 +62,22 @@ for (i in 1:length(restsp)) {
                                     Camera == sitecam[sitecam$site_ID == unique(data_ruv$site_ID)[s],2][n]) %>% pull(staytime)
         # do the most nested level first, Tij staying time
         for (x in 1:n) {
-          Tij[x] <- dgamma(x = stay, shape = par[1], scale = par[2], log = T) %>% sum # params[1] = shape
+          Tij[x] <- dgamma(x = stay, shape = par[1], scale = par[2], log = T) %>% sum
         }
       }
       return(
-        -1 * sum( dpois(x = detects, lambda = par[3], log = T) + sum(Tij) ) # params[2] = lambda
+        -1 * sum( dnbinom(x = detects, mu = par[3], size = par[4], log = T) + sum(Tij) )
       )
     }
     # put that through the optimise function
     # with error handling
-    optout <- tryCatch(optim(par = c(0.5,0.5,9), REST_poisson, method = "L-BFGS-B", lower = c(0,0,0), upper = c(2000,9,450), hessian = T),
+    optout <- tryCatch(optim(par = c(0.5,0.5,9,0.1), REST_nb, method = "L-BFGS-B", lower = c(0,0,0,0), upper = c(2000,50,450,50), hessian = T),
                        error = function(e) e)
     if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
     
-    output_poisson[2*i-s+1,3:5] <- optout$par
-    output_poisson$Lvalue[2*i-s+1] <- optout$value
-    output_poisson_hess[[2*i-s+1]] <- optout$hessian
+    output_nb[2*i-s+1,3:6] <- optout$par
+    output_nb$Lvalue[2*i-s+1] <- optout$value
+    output_nb_hess[[2*i-s+1]] <- optout$hessian
   }
 }
 
@@ -89,7 +86,7 @@ for (i in 1:length(restsp)) {
 for (i in 1:length(restsp)) {
 
   for (s in 1:sites) {
-    if(is.na(output_poisson$shapeT[2*i-s+1]) == F) next 
+    if(is.na(output_nb$shapeT[2*i-s+1]) == F) next 
     # move on if there's already a model output there
     
     set.seed(240) # replicability
@@ -99,7 +96,7 @@ for (i in 1:length(restsp)) {
       pull(detects)
     
     # Establish MLE likelihood function
-    REST_poisson2 <- function(par) { # where x is a vector c(gamma shape, poisson lambda)
+    REST_nb2 <- function(par) { # where x is a vector c(gamma shape, nb lambda)
       Tij <- rep(0,cams[s])
       for (n in 1:cams[s]) {
         # make a data object for staying time per site-camera
@@ -116,79 +113,70 @@ for (i in 1:length(restsp)) {
     }
     # put that through the optimise function
     # with error handling
-    optout <- tryCatch(optim(par = c(0.5,9), REST_poisson2, method = "L-BFGS-B", lower = c(0,0), upper = c(2000,450), hessian = T),
+    optout <- tryCatch(optim(par = c(0.5,9), REST_nb2, method = "L-BFGS-B", lower = c(0,0), upper = c(2000,450), hessian = T),
                        error = function(e) e)
     if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
     
     # store fitting outputs
-    output_poisson[2*i-s+1,c(3,5)] <- optout$par
-    output_poisson$Lvalue[[2*i-s+1]] <- optout$value
-    output_poisson_hess[[2*i-s+1]] <- optout$hessian
+    output_nb[2*i-s+1,c(3,5)] <- optout$par
+    output_nb_hess[[2*i-s+1]] <- optout$hessian
     
   }
 }
 
-## Stopped fixing here
-# output_poisson <- output_poisson[-which(is.na(output_poisson$shapeT)),]
-# remove species that couldn't converge either way
-output_poisson$pars[is.na(output_poisson$scaleT)] <- 2
-# specify number of pars
-output_poisson$pars[is.na(output_poisson$pars)] <- 3 
-# the rest of them have 3 pars if NA
-output_poisson$scaleT[output_poisson$pars == 2] <- 1 
-# correctly fill in scale for the 2 par models
+output_nb$scaleT[is.na(output_nb$shapeT) == F & is.na(output_nb$scaleT) == T] <- 1
 
 # remove temp objects
 rm(detects, i, n, s, sp, stay, Tij, x)
+output_nb[[3]] <- as.numeric(output_nb[[3]])
+output_nb[[4]]  <- as.numeric(output_nb[[4]])
+output_nb[[5]]  <- as.numeric(output_nb[[5]])
 
 # calculate D from E(T) and E(Y), D = E(Y)E(T) / (sH)
 # s = detection zone, 4 sq m
 # H = observation period, 45 minutes = 2700 s, seconds to line up with 
-output_poisson$D[output_poisson$site_ID == 'hale_kinalea'] <- (with(output_poisson[output_poisson$site_ID == 'hale_kinalea', ], shapeT * scaleT * lambdaY) / (2700 * 4 * cams[1])) * 250
-output_poisson$D[output_poisson$site_ID == 'hale_kaku'] <- (with(output_poisson[output_poisson$site_ID == 'hale_kaku', ], shapeT * scaleT * lambdaY) / (2700 * 4 * cams[2]))*250 # scale to be density within belt transect
+output_nb$D[output_nb$site_ID == 'hale_kinalea'] <- (with(output_nb[output_nb$site_ID == 'hale_kinalea', ], shapeT * scaleT * lambdaY) / (2700 * 4 * cams[1])) * 250
+output_nb$D[output_nb$site_ID == 'hale_kaku'] <- (with(output_nb[output_nb$site_ID == 'hale_kaku', ], shapeT * scaleT * lambdaY) / (2700 * 4 * cams[2]))*250 # scale to be density within belt transect
 
 # going to need to calculate SEs differently depending on number of parameters fitted
 
-output_poisson_hess[which(sapply(output_poisson_hess, function(e) sum(e) == 0))] # check any that have "improper" fits giving 0 in hessian
-output_poisson_hess[which(sapply(output_poisson_hess, function(e) 0 %in% e))] # check any that have "improper" fits giving 0 in hessian
-# output_poisson <- output_poisson[-which(sapply(output_poisson_hess, function(e) sum(e) == 0))] # get rid of the fully 0s
-# output_poisson_hess <- output_poisson_hess[-which(sapply(output_poisson_hess, function(e) sum(e) == 0))]
-# can use hessian to index output_poisson because they have the same indexing from the loop
-
-notNA2 <- which(output_poisson$pars == 2) # 2 par models
-notNA3 <- which(output_poisson$pars == 3)
+notNA2 <- which(is.na(output_nb$D) == F & output_nb$scaleT == 1) # 2 par models
+notNA3 <- which(is.na(output_nb$D) == F & output_nb$scaleT != 1) # 3 par models
 # reference vector for species with valid Hessian matrices
-output_poisson_hess[notNA2]
-output_poisson_hess[notNA3]
+output_nb_hess[notNA2]
+output_nb_hess[notNA3]
+notNA3 <- notNA3[-4] # get rid of 4, all zeroes
 
-output_poisson$shape_se <- NA
-output_poisson$scale_se <- NA
-output_poisson$lambda_se <- NA
+output_nb$shape_var <- NA
+output_nb$scale_var <- NA
+output_nb$lambda_var <- NA
 for (i in 1:length(notNA2)) {
-  se <- tryCatch(diag(solve(output_poisson_hess[[notNA2[i]]])), error = function(e) e) # variances!
+  se <- tryCatch(diag(solve(output_nb_hess[[notNA2[i]]])), error = function(e) e) # variances!
   if(inherits(se, "error")) next
-  output_poisson[notNA2[i],c(9,11)] <- se
+  output_nb[notNA2[i],c(7,9)] <- se
 }
 for (i in 1:length(notNA3)) {
-  se <- tryCatch(diag(solve(output_poisson_hess[[notNA3[i]]])), error = function(e) e) # variances!
+  se <- tryCatch(diag(solve(output_nb_hess[[notNA3[i]]])), error = function(e) e) # variances!
   if(inherits(se, "error")) next
-  output_poisson[notNA3[i],9:11] <- se
+  output_nb[notNA3[i],7:9] <- se
 }
 
 # check how many species have singular standard errors (i.e. unreliable models)
-output_poisson %>% 
-  filter(is.na(shape_se)| is.na(lambda_se), is.na(D) == F) %>% nrow # 4 species
-output_poisson %>% filter(is.na(shape_se) | is.na(lambda_se), is.na(D) == F) %>% View
+output_nb %>% 
+  filter(is.na(shape_var), is.na(scale_var), is.na(lambda_var), is.na(D) == F) %>% nrow # 4 species
+output_nb %>% filter(is.na(shape_var), is.na(scale_var), is.na(lambda_var), is.na(D) == F) %>% View
 
 # consider running a 2 par model for them
 
 # remove those and rerun
-output_poisson[is.na(output_poisson$shape_se) & is.na(output_poisson$scale_se) & is.na(output_poisson$lambda_se), 3:8] <- NA
+output_nb[is.na(output_nb$shape_var) & is.na(output_nb$scale_var) & is.na(output_nb$lambda_var), 3:6] <- NA
+# also remove the hessian matrices
+output_nb_hess[is.na(output_nb$shape_var) & is.na(output_nb$scale_var) & is.na(output_nb$lambda_var)] <- 0
 
 for (i in 1:length(restsp)) {
   
   for (s in 1:sites) {
-    if(is.na(output_poisson$shapeT[2*i-s+1]) == F) next 
+    if(is.na(output_nb$shapeT[2*i-s+1]) == F) next 
     # move on if there's already a model output there
     
     set.seed(240) # replicability
@@ -198,7 +186,7 @@ for (i in 1:length(restsp)) {
       pull(detects)
     
     # Establish MLE likelihood function
-    REST_poisson2 <- function(par) { # where x is a vector c(gamma shape, poisson lambda)
+    REST_nb2 <- function(par) { # where x is a vector c(gamma shape, nb lambda)
       Tij <- rep(0,cams[s])
       for (n in 1:cams[s]) {
         # make a data object for staying time per site-camera
@@ -215,88 +203,69 @@ for (i in 1:length(restsp)) {
     }
     # put that through the optimise function
     # with error handling
-    optout <- tryCatch(optim(par = c(0.5,9), REST_poisson2, method = "L-BFGS-B", lower = c(0,0), upper = c(2000,450), hessian = T),
+    optout <- tryCatch(optim(par = c(0.5,9), REST_nb2, method = "L-BFGS-B", lower = c(0,0), upper = c(2000,450), hessian = T),
                        error = function(e) e)
     if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
     
     # store fitting outputs
-    output_poisson[2*i-s+1,c(3,5)] <- optout$par
-    output_poisson$Lvalue[2*i-s+1] <- optout$value
-    output_poisson_hess[[2*i-s+1]] <- optout$hessian
+    output_nb[2*i-s+1,c(3,5)] <- optout$par
+    output_nb$Lvalue[2*i-s+1] <- optout$value
+    output_nb_hess[[2*i-s+1]] <- optout$hessian
     
   }
 }
 
-# calculate density
-output_poisson$D[output_poisson$site_ID == 'hale_kinalea' & is.na(output_poisson$D)] <- (with(output_poisson[output_poisson$site_ID == 'hale_kinalea' & is.na(output_poisson$D), ], shapeT * lambdaY) / (2700 * 4 * cams[1])) * 250
-output_poisson$D[output_poisson$site_ID == 'hale_kaku' & is.na(output_poisson$D)] <- (with(output_poisson[output_poisson$site_ID == 'hale_kaku' & is.na(output_poisson$D), ], shapeT * lambdaY) / (2700 * 4 * cams[2]))*250 # scale to be density within belt transect
 
-output_poisson$pars[is.na(output_poisson$shapeT) == F & is.na(output_poisson$scaleT) == T] <- 2
-output_poisson$scaleT[is.na(output_poisson$shapeT) == F & is.na(output_poisson$scaleT) == T] <- 1
+output_nb$D[output_nb$site_ID == 'hale_kinalea' & is.na(output_nb$D)] <- (with(output_nb[output_nb$site_ID == 'hale_kinalea' & is.na(output_nb$D), ], shapeT * lambdaY) / (2700 * 4 * cams[1])) * 250
+output_nb$D[output_nb$site_ID == 'hale_kaku' & is.na(output_nb$D)] <- (with(output_nb[output_nb$site_ID == 'hale_kaku' & is.na(output_nb$D), ], shapeT * lambdaY) / (2700 * 4 * cams[2]))*250 # scale to be density within belt transect
+output_nb$scaleT[is.na(output_nb$shapeT) == F & is.na(output_nb$scaleT) == T] <- 1
 
-notNA2 <- which(is.na(output_poisson$D) == F & output_poisson$scaleT == 1) # 2 par models
+notNA2 <- which(is.na(output_nb$D) == F & output_nb$scaleT == 1) # 2 par models
 for (i in 1:length(notNA2)) {
-  se <- tryCatch(diag(solve(output_poisson_hess[[notNA2[i]]])), error = function(e) e) # variances!
+  se <- tryCatch(diag(solve(output_nb_hess[[notNA2[i]]])), error = function(e) e) # variances!
   if(inherits(se, "error")) next
-  output_poisson[notNA2[i],c(9,11)] <- se
+  output_nb[notNA2[i],c(7,9)] <- se
 }
-
-# ok, if it has not converged in three iterations, remove
-output_poisson <- output_poisson %>% filter(!is.na(lambda_se))
 
 # interpret outputs
 # gamma shape = mean = E(T) expected staying time
-# poisson lambda = mean = variance = E(Y) expected number of detections
+# nb lambda = mean = variance = E(Y) expected number of detections
 
 # BOOTSTRAP CONFIDENCE INTERVALS
 
 # make empty lists to store bootstrapping per species
-bootTY <- as.list(rep(0,nrow(output_poisson)))
+bootTY <- as.list(rep(0,nrow(output_nb)))
 # empty dataframe to store the estimated confidence interval bounds
-Dpredict <- matrix(nrow = nrow(output_poisson), ncol = 2)
-colnames(Dpredict) <- c('pred', 'se')
+Dpredict <- matrix(nrow = nrow(output_nb), ncol = 3)
+colnames(Dpredict) <- c('pred', 'lwr', 'upr')
 set.seed(240) # reproducibility :)
-boots = 2500 # how many iterations
-
-for (i in 1:nrow(output_poisson)) {
-
-  bootTY[[i]] <- matrix(nrow = boots, ncol = 3) # empty matrix for each bootstrap iteration
+for (i in 1:nrow(output_nb)) {
+  bootTY[[i]] <- matrix(nrow = 1000, ncol = 3) # empty matrix for each bootstrap iteration
   colnames(bootTY[[i]]) <- c('predT', 'predY', 'predD')
   
   # loop for bootstrap iterations per REST model
   # pick out random T and Y from model estimated distribution parameters
-  for (j in 1:boots) {
-    bootTY[[i]][j,1] <-  rgamma(1, shape = output_poisson$shapeT[i], scale = output_poisson$scaleT[i])
-    bootTY[[i]][j,2] <-  rpois(1, lambda = output_poisson$lambdaY[i])
+  for (j in 1:1000) {
+    bootTY[[i]][j,1] <-  rgamma(1, shape = output_nb$shapeT[i], scale = output_nb$scaleT[i])
+    bootTY[[i]][j,2] <-  rpois(1, lambda = output_nb$lambdaY[i])
   }
   
   # calculate D from the sampled T and Y parameters
-  if (output_poisson$site_ID[i] == 'hale_kaku') { # account for camera number differences
+  if (output_nb$site_ID[i] == 'hale_kaku') { # account for camera number differences
     bootTY[[i]][,3] = (bootTY[[i]][,1] * bootTY[[i]][,2] / (2700 * 4 * 3)) * 250
   } else {bootTY[[i]][,3] = (bootTY[[i]][,1] * bootTY[[i]][,2] / (2700 * 4 * 4)) * 250}
-}
-
-for (i in 1:nrow(output_poisson)) {
-  Dpredict[i,1] <- mean(bootTY[[i]][,3])
-  Dpredict[i,2] <- sd(bootTY[[i]][,3])
-}
-
-Dpredict <- as_tibble(Dpredict)
-Dpredict$lwr <- with(Dpredict, pred - 1.96*se)
-Dpredict$upr <- with(Dpredict, pred + 1.96*se)
-
-Dpredict$lwrB
-# try the "order" method
-for (i in 1:nrow(output_poisson)) {
+  
+  # calculate the predicted values from each bootstrap
   bootTY[[i]] <- bootTY[[i]] %>% as_tibble %>% arrange(predD) %>% as.matrix # arrange predicted values in ascending order
-  Dpredict$lwrB[i] <- bootTY[[i]][round(0.025 * boots, 0),3] # because we arranged it, the 25 = the point of 2.5%
-  Dpredict$uprB[i] <- bootTY[[i]][round(0.975 * boots, 0),3] # 975 = 97.5
+  Dpredict[i,1] <- mean(bootTY[[i]][,3])
+  Dpredict[i,2] <- bootTY[[i]][25,3] # because we arranged it, the 25 = the point of 2.5%
+  Dpredict[i,3] <- bootTY[[i]][975,3] # 975 = 97.5
 }
 
 # produce final output
-output_poisson <- bind_cols(output_poisson, Dpredict)
-final_poisson <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
-  filter(occurrences >= 10) %>% select(!occurrences) %>% inner_join(., output_poisson, by=c("site_ID", "Taxon"))
+output_nb <- bind_cols(output_nb, Dpredict)
+final_nb <- data_ruv %>% group_by(site_ID, Taxon) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
+  filter(occurrences >= 10) %>% select(!occurrences) %>% inner_join(., output_nb, by=c("site_ID", "Taxon"))
 
 # export outputs
-# write.csv(final_poisson, "../outputs/REST_poisson.csv", row.names = F)
+# write.csv(final_nb, "../outputs/REST_poisson.csv", row.names = F)
