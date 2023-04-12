@@ -220,50 +220,50 @@ rm(s, se, restsp2, notNA2, notNA, notNA3, i, n, sitecam)
 # Bootstrap confidence intervals ------------------------------------------
 
 # make empty lists to store bootstrapping per species
-bootTY <- as.list(rep(0,nrow(output_nb)))
+boot_nb <- as.list(rep(0,nrow(output_nb)))
 # empty dataframe to store the estimated confidence interval bounds
-Dpredict <- matrix(nrow = nrow(output_nb), ncol = 2)
-colnames(Dpredict) <- c('pred', 'se')
+pred_nb <- matrix(nrow = nrow(output_nb), ncol = 2)
+colnames(pred_nb) <- c('pred', 'se')
 set.seed(240) # reproducibility :)
 boots = 5000 # how many iterations
 
 for (i in 1:nrow(output_nb)) {
   
-  bootTY[[i]] <- matrix(nrow = boots, ncol = 3) # empty matrix for each bootstrap iteration
-  colnames(bootTY[[i]]) <- c('predT', 'predY', 'predD')
+  boot_nb[[i]] <- matrix(nrow = boots, ncol = 3) # empty matrix for each bootstrap iteration
+  colnames(boot_nb[[i]]) <- c('predT', 'predY', 'predD')
   
   # loop for bootstrap iterations per REST model
   # pick out random T and Y from model estimated distributions
   for (j in 1:boots) {
-    bootTY[[i]][j,1] <-  rgamma(1, shape = output_nb$shapeT[i], scale = output_nb$scaleT[i])
-    bootTY[[i]][j,2] <-  rnbinom(1, mu = output_nb$muY, size = output_nb$sizeY)
+    boot_nb[[i]][j,1] <-  rgamma(1, shape = output_nb$shapeT[i], scale = output_nb$scaleT[i])
+    boot_nb[[i]][j,2] <-  rnbinom(1, mu = output_nb$muY, size = output_nb$sizeY)
   }
   
   # calculate D from the sampled T and Y parameters
-  bootTY[[i]][,3] = (bootTY[[i]][,1] * bootTY[[i]][,2] / (2700 * 4 * output_nb$cam[i])) * 250
+  boot_nb[[i]][,3] = (boot_nb[[i]][,1] * boot_nb[[i]][,2] / (2700 * 4 * output_nb$cam[i])) * 250
 }
 beep()
 
-hist(bootTY[[runif(1, 1, nrow(output_nb))]][,3]) # distribution of a random species' bootstrapped density estimate
+hist(boot_nb[[runif(1, 1, nrow(output_nb))]][,3]) # distribution of a random species' bootstrapped density estimate
 # see if it fits log-normal distribution
 
 # will a random species' density distribution look normal if we log it
-hist(log(bootTY[[runif(1, 1, nrow(output_nb))]][,3]))
+hist(log(boot_nb[[runif(1, 1, nrow(output_nb))]][,3]))
 
 for (i in 1:nrow(output_nb)) {
-  bootTY[[i]][which(is.infinite(log(bootTY[[i]][,3]))),3] <- NA # replace all infinite values with NA
-  Dpredict[i,1] <- mean(log(bootTY[[i]][,3]), na.rm = T)
-  Dpredict[i,2] <- sd(log(bootTY[[i]][,3]), na.rm = T)
+  boot_nb[[i]][which(is.infinite(log(boot_nb[[i]][,3]))),3] <- NA # replace all infinite values with NA
+  pred_nb[i,1] <- mean(log(boot_nb[[i]][,3]), na.rm = T)
+  pred_nb[i,2] <- sd(log(boot_nb[[i]][,3]), na.rm = T)
 }
 
-Dpredict <- as_tibble(Dpredict)
+pred_nb <- as_tibble(pred_nb)
 # confidence intervals from the SE
-Dpredict$lwr <- with(Dpredict, pred - 1.96*se)
-Dpredict$upr <- with(Dpredict, pred + 1.96*se)
-Dpredict <- exp(Dpredict) # back transform
+pred_nb$lwr <- with(pred_nb, pred - 1.96*se)
+pred_nb$upr <- with(pred_nb, pred + 1.96*se)
+pred_nb <- exp(pred_nb) # back transform
 
 # merge confidence intervals 
-output_nb <- bind_cols(output_nb, Dpredict)
+output_nb <- bind_cols(output_nb, pred_nb)
 
 # calculate AICc so we can compare with negative binomial models
 # 2k - 2log(L) + (2k^2 + 2k) / (n - k - 1)

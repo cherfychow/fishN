@@ -250,50 +250,50 @@ rm(s, se, var2, notNA2, notNA3, i, n, sitecam, detects, j)
 # Bootstrap confidence intervals ------------------------------------------
 
 # make empty lists to store bootstrapping per species
-bootTY <- as.list(rep(0,nrow(output_poisson)))
+boot_p <- as.list(rep(0,nrow(output_poisson)))
 # empty dataframe to store the estimated confidence interval bounds
-Dpredict <- matrix(nrow = nrow(output_poisson), ncol = 2)
-colnames(Dpredict) <- c('pred', 'se')
+pred_p <- matrix(nrow = nrow(output_poisson), ncol = 2)
+colnames(pred_p) <- c('pred', 'se')
 set.seed(240) # reproducibility :)
 boots = 5000 # how many iterations
 
 for (i in 1:nrow(output_poisson)) {
 
-  bootTY[[i]] <- matrix(nrow = boots, ncol = 3) # empty matrix for each bootstrap iteration
-  colnames(bootTY[[i]]) <- c('predT', 'predY', 'predD')
+  boot_p[[i]] <- matrix(nrow = boots, ncol = 3) # empty matrix for each bootstrap iteration
+  colnames(boot_p[[i]]) <- c('predT', 'predY', 'predD')
   
   # loop for bootstrap iterations per REST model
   # pick out random T and Y from model estimated distributions
   for (j in 1:boots) {
-    bootTY[[i]][j,1] <-  rgamma(1, shape = output_poisson$shapeT[i], scale = output_poisson$scaleT[i])
-    bootTY[[i]][j,2] <-  rpois(1, lambda = output_poisson$lambdaY[i])
+    boot_p[[i]][j,1] <-  rgamma(1, shape = output_poisson$shapeT[i], scale = output_poisson$scaleT[i])
+    boot_p[[i]][j,2] <-  rpois(1, lambda = output_poisson$lambdaY[i])
   }
   
   # calculate D from the sampled T and Y parameters
-  bootTY[[i]][,3] = (bootTY[[i]][,1] * bootTY[[i]][,2] / (2700 * 4 * output_poisson$cam[i])) * 250
+  boot_p[[i]][,3] = (boot_p[[i]][,1] * boot_p[[i]][,2] / (2700 * 4 * output_poisson$cam[i])) * 250
 }
 beep()
 
-hist(bootTY[[runif(1, 1, nrow(output_poisson))]][,3]) # distribution of a random species' bootstrapped density estimate
+hist(boot_p[[runif(1, 1, nrow(output_poisson))]][,3]) # distribution of a random species' bootstrapped density estimate
 # see if it fits log-normal distribution
 
 # will a random species' density distribution look normal if we log it
-hist(log(bootTY[[runif(1, 1, nrow(output_poisson))]][,3]))
+hist(log(boot_p[[runif(1, 1, nrow(output_poisson))]][,3]))
 
 for (i in 1:nrow(output_poisson)) {
-  bootTY[[i]][which(is.infinite(log(bootTY[[i]][,3]))),3] <- NA # replace all infinite values with NA
-  Dpredict[i,1] <- mean(log(bootTY[[i]][,3]), na.rm = T)
-  Dpredict[i,2] <- sd(log(bootTY[[i]][,3]), na.rm = T)
+  boot_p[[i]][which(is.infinite(log(boot_p[[i]][,3]))),3] <- NA # replace all infinite values with NA
+  pred_p[i,1] <- mean(log(boot_p[[i]][,3]), na.rm = T)
+  pred_p[i,2] <- sd(log(boot_p[[i]][,3]), na.rm = T)
 }
 
-Dpredict <- as_tibble(Dpredict)
+pred_p <- as_tibble(pred_p)
 # confidence intervals from the SE
-Dpredict$lwr <- with(Dpredict, pred - 1.96*se)
-Dpredict$upr <- with(Dpredict, pred + 1.96*se)
-Dpredict <- exp(Dpredict) # back transform
+pred_p$lwr <- with(pred_p, pred - 1.96*se)
+pred_p$upr <- with(pred_p, pred + 1.96*se)
+pred_p <- exp(pred_p) # back transform
 
 # merge confidence intervals 
-output_poisson <- bind_cols(output_poisson, Dpredict)
+output_poisson <- bind_cols(output_poisson, pred_p)
 
 # calculate AICc so we can compare with negative binomial models
 # 2k - 2log(L) + (2k^2 + 2k) / (n - k - 1)
