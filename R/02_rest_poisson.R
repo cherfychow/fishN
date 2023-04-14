@@ -247,13 +247,13 @@ output_poisson$D <- with(output_poisson, (shapeT * scaleT * lambdaY) / (2700 * 4
 # clear up temporary objects from model fitting
 rm(s, se, var2, notNA2, notNA3, i, n, sitecam, detects, j)
 
-# Bootstrap confidence intervals ------------------------------------------
+# Parametric bootstrapping ------------------------------------------
 
 # make empty lists to store bootstrapping per species
 boot_p <- as.list(rep(0,nrow(output_poisson)))
 # empty dataframe to store the estimated confidence interval bounds
-pred_p <- matrix(nrow = nrow(output_poisson), ncol = 2)
-colnames(pred_p) <- c('pred', 'se')
+pred_p <- matrix(nrow = nrow(output_poisson), ncol = 3)
+colnames(pred_p) <- c('pred', 'lwr', 'upr')
 set.seed(240) # reproducibility :)
 boots = 5000 # how many iterations
 
@@ -277,20 +277,13 @@ beep()
 hist(boot_p[[runif(1, 1, nrow(output_poisson))]][,3]) # distribution of a random species' bootstrapped density estimate
 # see if it fits log-normal distribution
 
-# will a random species' density distribution look normal if we log it
-hist(log(boot_p[[runif(1, 1, nrow(output_poisson))]][,3]))
-
+# calculate confidence interval using percentile method
 for (i in 1:nrow(output_poisson)) {
-  boot_p[[i]][which(is.infinite(log(boot_p[[i]][,3]))),3] <- NA # replace all infinite values with NA
-  pred_p[i,1] <- mean(log(boot_p[[i]][,3]), na.rm = T)
-  pred_p[i,2] <- sd(log(boot_p[[i]][,3]), na.rm = T)
+  boot_p[[i]] <- boot_p[[i]][order(boot_p[[i]][,3]),] # order ascending values of D
+  pred_p[i,1] <- boot_p[[i]][boots/2,3] # 50th percentile for the predicted D
+  pred_p[i,2] <- boot_p[[i]][ round(boots*0.025, 1), 3] # 2.5 percentile for lower
+  pred_p[i,3] <- boot_p[[i]][ round(boots*0.975, 1), 3] # 97.5 percentile for lower
 }
-
-pred_p <- as_tibble(pred_p)
-# confidence intervals from the SE
-pred_p$lwr <- with(pred_p, pred - 1.96*se)
-pred_p$upr <- with(pred_p, pred + 1.96*se)
-pred_p <- exp(pred_p) # back transform
 
 # merge confidence intervals 
 output_poisson <- bind_cols(output_poisson, pred_p)
@@ -304,4 +297,4 @@ output_poisson <- data_ruv %>%
 output_poisson$AICc <- with(output_poisson, 2*estPar - 2*log(Lvalue) + ((2*estPar^2 + 2*estPar) / (detects - estPar - 1)))
 
 # export outputs
-write.csv(output_poisson, "../outputs/REST_poisson.csv", row.names = F)
+write.csv(output_poisson, "../outputs/REST_poisson2.csv", row.names = F)

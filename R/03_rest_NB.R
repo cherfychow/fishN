@@ -222,8 +222,8 @@ rm(s, se, restsp2, notNA2, notNA, notNA3, i, n, sitecam)
 # make empty lists to store bootstrapping per species
 boot_nb <- as.list(rep(0,nrow(output_nb)))
 # empty dataframe to store the estimated confidence interval bounds
-pred_nb <- matrix(nrow = nrow(output_nb), ncol = 2)
-colnames(pred_nb) <- c('pred', 'se')
+pred_nb <- matrix(nrow = nrow(output_nb), ncol = 3)
+colnames(pred_nb) <- c('pred', 'lwr', 'upr')
 set.seed(240) # reproducibility :)
 boots = 5000 # how many iterations
 
@@ -247,20 +247,13 @@ beep()
 hist(boot_nb[[runif(1, 1, nrow(output_nb))]][,3]) # distribution of a random species' bootstrapped density estimate
 # see if it fits log-normal distribution
 
-# will a random species' density distribution look normal if we log it
-hist(log(boot_nb[[runif(1, 1, nrow(output_nb))]][,3]))
 
-for (i in 1:nrow(output_nb)) {
-  boot_nb[[i]][which(is.infinite(log(boot_nb[[i]][,3]))),3] <- NA # replace all infinite values with NA
-  pred_nb[i,1] <- mean(log(boot_nb[[i]][,3]), na.rm = T)
-  pred_nb[i,2] <- sd(log(boot_nb[[i]][,3]), na.rm = T)
+for (i in 1:nrow(output_poisson)) {
+  boot_nb[[i]] <- boot_nb[[i]][order(boot_nb[[i]][,3]),] # order ascending values of D
+  pred_nb[i,1] <- boot_nb[[i]][boots/2,3] # 50th percentile for the predicted D
+  pred_nb[i,2] <- boot_nb[[i]][ round(boots*0.025, 1), 3] # 2.5 percentile for lower
+  pred_nb[i,3] <- boot_nb[[i]][ round(boots*0.975, 1), 3] # 97.5 percentile for lower
 }
-
-pred_nb <- as_tibble(pred_nb)
-# confidence intervals from the SE
-pred_nb$lwr <- with(pred_nb, pred - 1.96*se)
-pred_nb$upr <- with(pred_nb, pred + 1.96*se)
-pred_nb <- exp(pred_nb) # back transform
 
 # merge confidence intervals 
 output_nb <- bind_cols(output_nb, pred_nb)
@@ -274,4 +267,4 @@ output_nb <- data_ruv %>%
 output_nb$AICc <- with(output_nb, 2*estPar - 2*log(Lvalue) + ((2*estPar^2 + 2*estPar) / (detects - estPar - 1)))
 
 # export outputs
-write.csv(output_nb, "../outputs/REST_nbinom.csv", row.names = F)
+write.csv(output_nb, "../outputs/REST_nbinom2.csv", row.names = F)
