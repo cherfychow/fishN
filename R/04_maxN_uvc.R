@@ -17,25 +17,32 @@ require(scales)
 ###############################################
 # CALCULATE MAXN ---------------------------
 
+# turn the timestamps into intervals with a dummy date to make timestamps fake "dates"
 data_ruv$interval <- with(data_ruv, interval(start = paste0("2022-11-01 12:", Time_entry) %>% ymd_hms(), 
                                              end = paste0("2022-11-01 12:", Time_exit) %>% ymd_hms()))
 # just assign a dummy date and hour
 
-# create a sampling sequence of time at 15 second intervals
+# create a sampling sequence of time at 5 second intervals
 time <- seq(as.POSIXct("2022-11-01 12:00:00"), as.POSIXct("2022-11-01 12:45:00"), by=5)
 sites = n_distinct(data_ruv$site_ID)
-overlap = as.list(rep(NA, sites))
+overlap = as.list(rep(NA, n_distinct(data_ruv$uniqueCam)))
+names(overlap) <- unique(data_ruv$uniqueCam)
 # list levels
 # site > spsize
 
-# general loop for maxN overlap calculations
-for (s in 1:sites) { # for each site
-  # make an overlap list object for each site, fetching by the overlap name variable
-  tempsp <- data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[s]) %>% pull(spsize) %>% unique %>% sort
-  overlap[[s]] <- as.list(rep(NA, length(tempsp)))
+# modify camera names so that they're unique across sites
+data_ruv <- data_ruv %>% mutate(uniqueCam = paste(site_ID, Camera, sep = '_'))
 
-  for (i in 1:length(tempsp)) { # per species-size class
-    overlap[[s]][[i]] <- data.frame(time = time, o1 = NA, o2 = NA, o3 = NA, 
+# general loop for maxN overlap calculations
+for (c in 1:n_distinct(data_ruv$uniqueCam)) { # for each camera at this site s
+  
+  # make an overlap list object for each site, fetching by the overlap name variable
+  tempsp <- data_ruv %>% filter(uniqueCam == unique(data_ruv$uniqueCam)[c]) %>% 
+    pull(spsize) %>% unique %>% sort
+  overlap[[c]] <- as.list(rep(NA, length(tempsp)))
+  
+  for (i in 1:length(tempsp)) { # per species-size class in camera c at site s
+    overlap[[c]][[i]] <- data.frame(time = time, o1 = NA, o2 = NA, o3 = NA, 
                                     o4 = NA, o5 = NA, o6 = NA, o7 = NA, o8 = NA)
     
     for (t in 1:length(time)) { # for each sampling time stamp
@@ -43,7 +50,8 @@ for (s in 1:sites) { # for each site
       
       # per record of the species-size class in raw data
       # in alphabetical order so that the species order is consistent across loops
-      for (n in which(data_ruv$site_ID == unique(data_ruv$site_ID)[s] & data_ruv$spsize == tempsp[i])) { 
+      for (n in which(data_ruv$uniqueCam == unique(data_ruv$uniqueCam)[c] & 
+                      data_ruv$spsize == tempsp[i])) { 
         
         if (time[t] %within% data_ruv$interval[n]) {
           temp <- append(temp, n) 
@@ -52,30 +60,33 @@ for (s in 1:sites) { # for each site
       if (length(temp) == 1) next # no overlaps at all, move on
       temp <- temp[-1]
       # store in overlap table for species-size i at row t
-      if (length(temp) == 1) { overlap[[s]][[i]][t,2] <- temp }
-      else overlap[[s]][[i]][t,2:(length(temp)+1)] <- temp 
+      if (length(temp) == 1) { overlap[[c]][[i]][t,2] <- temp }
+      else overlap[[c]][[i]][t,2:(length(temp)+1)] <- temp 
     }
+    
   }
+  
 }
 
 beep() # this loop run takes 40 mins for two sites
 
 # now use the generated overlap tables for calculating MaxN
-MaxN <- as.list(rep(NA, sites))
-for (s in 1:sites) {
+MaxN <- as.list(rep(NA, n_distinct(data_ruv$uniqueCam)))
+for (s in 1:n_distinct(data_ruv$uniqueCam)) {
   
-  MaxN[[s]] <- data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[s]) %>% 
-           distinct(site_ID, Taxon, Size_class, spsize) %>% arrange(spsize) %>% mutate(MaxN = NA) %>% as.data.frame
+  MaxN[[s]] <- data_ruv %>% filter(uniqueCam == unique(data_ruv$uniqueCam)[s]) %>% 
+           distinct(site_ID, Camera, Taxon, Size_class, spsize) %>% arrange(spsize) %>% mutate(MaxN = NA) %>% as.data.frame
   
   for (i in 1:length(overlap[[s]])) {
     overlap[[s]][[i]] <- overlap[[s]][[i]] %>% filter(!is.na(o1)) # remove time stamps with no occurrences
     if (nrow(overlap[[s]][[i]]) < 1) next # move on if the whole overlap matrix is null
     overlap[[s]][[i]]$N <-  NA
     for (t in 1:nrow(overlap[[s]][[i]])) { # add up fish N in overlapping
-      temp <- overlap[[s]][[i]][t,-1] # variable column numbers depending on overlap counts so just everything but the first column
+      temp <- overlap[[s]][[i]][t,-1]
+      # variable column numbers depending on overlap counts so just everything but the first column (sample time)
       overlap[[s]][[i]][t,'N'] <- sum(data_ruv$Count[ temp[is.na(temp) == F] ])
     }
-    MaxN[[s]][i,5] <- max(overlap[[s]][[i]]$N) # Max of N
+    MaxN[[s]]$MaxN[i] <- max(overlap[[s]][[i]]$N) # Max of N
   }
   
 }
@@ -83,12 +94,12 @@ for (s in 1:sites) {
 # the NAs are species that still didn't get sampled by the 5 second intervals
 # do those manually
 
-data_maxn <- bind_rows(MaxN[[1]], MaxN[[2]])
+data_maxn <- bind_rows(MaxN)
 rm(temp)
 # rm(overlap) # only if you're sure MaxN loops run properly... 
 
 # export data_maxn for manual filling of the NAs
-write.csv(data_maxn, '../data/data_MaxN.csv', row.names = F)
+# write.csv(data_maxn, '../data/data_MaxN.csv', row.names = F)
 data_maxn <- read.csv('../data/data_maxn.csv', header = T) # read back in
 rm(overlap, detect1, detect2, stay1, stay2, tempsp, time, boots, i, j, n, s, t)
 
@@ -99,11 +110,10 @@ data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
 # prep REST to match the assemblage survey data like RUV or MaxN
 
 data_rest <- data_ruv %>% distinct(site_ID, Taxon, Size_class, spsize) %>% 
-  left_join(., output_poisson[c(1,3,4,12)], by=c("site_ID", "Taxon", "Size_class")) %>% 
-  left_join(., data_maxn, by=c("site_ID", "Taxon", "spsize"))
+  left_join(., output_poisson[c(1,3,4,12)], by=c("site_ID", "Taxon", "Size_class"))
 
-data_rest$combinedD <- data_rest$D # use MaxN to fill in gaps of species that couldn't be fit with REST
-data_rest$combinedD[is.na(data_rest$combinedD)] <- data_rest$MaxN[is.na(data_rest$combinedD)]
+# data_rest$combinedD <- data_rest$D # use MaxN to fill in gaps of species that couldn't be fit with REST
+# data_rest$combinedD[is.na(data_rest$combinedD)] <- data_rest$MaxN[is.na(data_rest$combinedD)]
 
 # cross-method comparison doesn't have to deal with size classes
 # construct the community matrix
@@ -112,9 +122,9 @@ nmatrix <- data_uvc %>% filter(str_detect(site_ID, 'kinalea|kaku')) %>%
 nmatrix <- data_rest %>% group_by(site_ID, Taxon) %>% 
   summarise(n = sum(D, na.rm = T)) %>% mutate(method = 'rest') %>% ungroup %>% filter(!is.na(n), !n == 0) %>% 
   bind_rows(nmatrix, .)
-nmatrix <- data_rest %>% group_by(site_ID, Taxon) %>% 
-  summarise(n = sum(combinedD, na.rm = T)) %>% mutate(method = 'restmax') %>% ungroup %>% filter(!is.na(n)) %>% 
-  bind_rows(nmatrix, .)
+# nmatrix <- data_rest %>% group_by(site_ID, Taxon) %>% 
+#   summarise(n = sum(combinedD, na.rm = T)) %>% mutate(method = 'restmax') %>% ungroup %>% filter(!is.na(n)) %>% 
+#   bind_rows(nmatrix, .)
 nmatrix <- data_maxn %>% group_by(site_ID, Taxon) %>% summarise(n = sum(MaxN, na.rm = T)) %>% ungroup %>% 
   mutate(method = 'maxN') %>% bind_rows(nmatrix, .)
 nmatrix <- nmatrix %>% tidyr::pivot_wider(., names_from = Taxon, values_from = n)
@@ -177,8 +187,8 @@ relpcoa2 <- ggplot(data = relpcoadt) +
 # make a dataframe of all methods joined
 # each row/record an observed species-size class
 
-dt_allmethods <- data_maxn %>% select(!spsize) %>% 
-  full_join(., data_rest[c(1,2,4,5)], by = c('site_ID', 'Taxon', 'Size_class')) %>% 
+dt_allmethods <- data_maxn %>% select(!c(spsize,Camera)) %>% 
+  full_join(., data_rest[-4], by = c('site_ID', 'Taxon', 'Size_class')) %>% 
   rename(., REST = D)
 dt_allmethods <- data_uvc %>% group_by(site_ID, Taxon, Size_class) %>% 
   summarise(UVC = sum(count)) %>% ungroup() %>% filter(str_detect(site_ID, 'kaku|kinalea')) %>% 
@@ -262,7 +272,7 @@ model_RU[[1]] <- lm(log(UVC + 1) ~ log(REST + 1), data = dt_allmethods)
 model_RU[[2]] <- lm(log(UVC + 1) ~ log(REST + 1) + Size_class, data = dt_allmethods)
 summary(model_RU[[1]])
 summary(model_RU[[2]])
-c(AIC(model_RU[[1]]), AIC(model_RU[[2]])) # inconclusive
+c(AIC(model_RU[[1]]), AIC(model_RU[[2]])) # model 2
 # plot(model_RU[[1]])
 # plot(model_RU[[2]])
 
@@ -299,7 +309,7 @@ for (i in 1:3) { # each model
 predicts[[1]]$x = newx$REST
 predicts[[2]]$x = newx$REST
 predicts[[3]]$x = newx$UVC
-predicts[[2]]$Size_class <- NULL # just because that model doesn't use it
+
   
 # REST - MaxN
 r_m <- ggplot(dt_allmethods) +
@@ -333,3 +343,22 @@ ggplot(dt_allmethods) +
   geom_line(data = predicts[[1]] %>% filter(Size_class == '10_20'), aes(x = x, y = exp(fitted) - 1)) +
   geom_abline(slope = 1, intercept = 0, linetype = "longdash", color = 'blue') +
   labs(x = 'REST', y = 'MaxN')
+
+
+###############################################
+# Camera compositional differences ------------
+# PCoA without pooling cameras
+
+# cross-method comparison doesn't have to deal with size classes
+# construct the community matrix
+n_cam <- data_uvc %>% filter(str_detect(site_ID, 'kinalea|kaku')) %>% 
+  group_by(site_ID, Taxon) %>% summarise(n = sum(count)) %>% mutate(method = 'uvc') %>% ungroup # filter and aggregate UVC
+n_cam <- data_maxn %>% group_by(site_ID, Taxon) %>% summarise(n = sum(MaxN, na.rm = T)) %>% ungroup %>% 
+  mutate(method = 'maxN') %>% bind_rows(nmatrix, .)
+n_cam <- nmatrix %>% tidyr::pivot_wider(., names_from = Taxon, values_from = n)
+n_cam <- nmatrix %>% replace(is.na(.), 0) # replace NAs with 0
+
+dis <- vegdist(nmatrix[-(1:2)], method = "euclidean", diag = F, binary = F)
+method_pcoa <- ape::pcoa(dis, correction = "none", rn = paste(nmatrix$site_ID, nmatrix$method, sep="_"))
+method_nmds <- vegan::metaMDS(dis) # really low stress and can't tell between rests... needs metric/quantitative
+plot(method_nmds) 

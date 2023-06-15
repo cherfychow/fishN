@@ -16,8 +16,6 @@ require(lubridate)
 require(ggthemes)
 require(ggdist)
 
-data_ruv$spsize <- with(data_ruv, paste(Taxon, Size_class, sep = "_"))
-
 
 # Raw data ----------------------------------------------------------------
 

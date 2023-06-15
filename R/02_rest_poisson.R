@@ -298,3 +298,4 @@ output_poisson$AICc <- with(output_poisson, 2*estPar - 2*log(Lvalue) + ((2*estPa
 
 # export outputs
 write.csv(output_poisson, "../outputs/REST_poisson2.csv", row.names = F)
+data_ruv$spsize <- with(data_ruv, paste(Taxon, Size_class, sep = "_"))
