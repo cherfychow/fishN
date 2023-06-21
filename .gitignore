@@ -43,3 +43,6 @@ vignettes/*.pdf
 *.knit.md
 # ignore RMD outputs
 *.html
+*.svg
+
+.DS_Store

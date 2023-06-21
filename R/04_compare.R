@@ -1,7 +1,7 @@
 
 
 ## FishN: comparing fish assemblage abundance surveying methods
-# Comparison between MaxN and UVC
+# Comparison between REST, MaxN, and UVC
 
 require(dplyr)
 require(lubridate)
@@ -12,96 +12,7 @@ require(stringr)
 require(ape)
 require(ggplot2)
 require(patchwork)
-require(scales)
-
-###############################################
-# CALCULATE MAXN ---------------------------
-
-# turn the timestamps into intervals with a dummy date to make timestamps fake "dates"
-data_ruv$interval <- with(data_ruv, interval(start = paste0("2022-11-01 12:", Time_entry) %>% ymd_hms(), 
-                                             end = paste0("2022-11-01 12:", Time_exit) %>% ymd_hms()))
-# just assign a dummy date and hour
-
-# create a sampling sequence of time at 5 second intervals
-time <- seq(as.POSIXct("2022-11-01 12:00:00"), as.POSIXct("2022-11-01 12:45:00"), by=5)
-sites = n_distinct(data_ruv$site_ID)
-overlap = as.list(rep(NA, n_distinct(data_ruv$uniqueCam)))
-names(overlap) <- unique(data_ruv$uniqueCam)
-# list levels
-# site > spsize
-
-# modify camera names so that they're unique across sites
-data_ruv <- data_ruv %>% mutate(uniqueCam = paste(site_ID, Camera, sep = '_'))
-
-# general loop for maxN overlap calculations
-for (c in 1:n_distinct(data_ruv$uniqueCam)) { # for each camera at this site s
-  
-  # make an overlap list object for each site, fetching by the overlap name variable
-  tempsp <- data_ruv %>% filter(uniqueCam == unique(data_ruv$uniqueCam)[c]) %>% 
-    pull(spsize) %>% unique %>% sort
-  overlap[[c]] <- as.list(rep(NA, length(tempsp)))
-  
-  for (i in 1:length(tempsp)) { # per species-size class in camera c at site s
-    overlap[[c]][[i]] <- data.frame(time = time, o1 = NA, o2 = NA, o3 = NA, 
-                                    o4 = NA, o5 = NA, o6 = NA, o7 = NA, o8 = NA)
-    
-    for (t in 1:length(time)) { # for each sampling time stamp
-      temp <- NA # make sure start with a clean slate
-      
-      # per record of the species-size class in raw data
-      # in alphabetical order so that the species order is consistent across loops
-      for (n in which(data_ruv$uniqueCam == unique(data_ruv$uniqueCam)[c] & 
-                      data_ruv$spsize == tempsp[i])) { 
-        
-        if (time[t] %within% data_ruv$interval[n]) {
-          temp <- append(temp, n) 
-        } else next
-      }
-      if (length(temp) == 1) next # no overlaps at all, move on
-      temp <- temp[-1]
-      # store in overlap table for species-size i at row t
-      if (length(temp) == 1) { overlap[[c]][[i]][t,2] <- temp }
-      else overlap[[c]][[i]][t,2:(length(temp)+1)] <- temp 
-    }
-    
-  }
-  
-}
-
-beep() # this loop run takes 40 mins for two sites
-
-# now use the generated overlap tables for calculating MaxN
-MaxN <- as.list(rep(NA, n_distinct(data_ruv$uniqueCam)))
-for (s in 1:n_distinct(data_ruv$uniqueCam)) {
-  
-  MaxN[[s]] <- data_ruv %>% filter(uniqueCam == unique(data_ruv$uniqueCam)[s]) %>% 
-           distinct(site_ID, Camera, Taxon, Size_class, spsize) %>% arrange(spsize) %>% mutate(MaxN = NA) %>% as.data.frame
-  
-  for (i in 1:length(overlap[[s]])) {
-    overlap[[s]][[i]] <- overlap[[s]][[i]] %>% filter(!is.na(o1)) # remove time stamps with no occurrences
-    if (nrow(overlap[[s]][[i]]) < 1) next # move on if the whole overlap matrix is null
-    overlap[[s]][[i]]$N <-  NA
-    for (t in 1:nrow(overlap[[s]][[i]])) { # add up fish N in overlapping
-      temp <- overlap[[s]][[i]][t,-1]
-      # variable column numbers depending on overlap counts so just everything but the first column (sample time)
-      overlap[[s]][[i]][t,'N'] <- sum(data_ruv$Count[ temp[is.na(temp) == F] ])
-    }
-    MaxN[[s]]$MaxN[i] <- max(overlap[[s]][[i]]$N) # Max of N
-  }
-  
-}
-
-# the NAs are species that still didn't get sampled by the 5 second intervals
-# do those manually
-
-data_maxn <- bind_rows(MaxN)
-rm(temp)
-# rm(overlap) # only if you're sure MaxN loops run properly... 
-
-# export data_maxn for manual filling of the NAs
-# write.csv(data_maxn, '../data/data_MaxN.csv', row.names = F)
-data_maxn <- read.csv('../data/data_maxn.csv', header = T) # read back in
-rm(overlap, detect1, detect2, stay1, stay2, tempsp, time, boots, i, j, n, s, t)
+source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/2e5525b9eda707989b2018c55625870d1aaa3f40/cherulean.R')
 
 ###############################################
 # PCOA COMPARISON -----------------------------------------------------------------
@@ -117,7 +28,7 @@ data_rest <- data_ruv %>% distinct(site_ID, Taxon, Size_class, spsize) %>%
 
 # cross-method comparison doesn't have to deal with size classes
 # construct the community matrix
-nmatrix <- data_uvc %>% filter(str_detect(site_ID, 'kinalea|kaku')) %>% 
+nmatrix <- data_uvc %>% filter(str_detect(site_ID, 'kinalea|kaku|sunset')) %>% 
   group_by(site_ID, Taxon) %>% summarise(n = sum(count)) %>% mutate(method = 'uvc') %>% ungroup # filter and aggregate UVC
 nmatrix <- data_rest %>% group_by(site_ID, Taxon) %>% 
   summarise(n = sum(D, na.rm = T)) %>% mutate(method = 'rest') %>% ungroup %>% filter(!is.na(n), !n == 0) %>% 
@@ -132,8 +43,7 @@ nmatrix <- nmatrix %>% replace(is.na(.), 0) # replace NAs with 0
 
 dis <- vegdist(nmatrix[-(1:2)], method = "euclidean", diag = F, binary = F)
 method_pcoa <- ape::pcoa(dis, correction = "none", rn = paste(nmatrix$site_ID, nmatrix$method, sep="_"))
-method_nmds <- vegan::metaMDS(dis) # really low stress and can't tell between rests... needs metric/quantitative
-plot(method_nmds) 
+biplot(method_pcoa)
 
 ## Plot PCoA with symbology -----------------------------------------------------------------
 
@@ -147,11 +57,13 @@ pcoadt <- as.data.frame(method_pcoa$vectors) %>% bind_cols(., nmatrix[1:2])
 
 pcoa1 <- ggplot(data = pcoadt) +
   geom_point(aes(x = Axis.1, y = Axis.2, color = site_ID, shape = method), size = 3) +
-  theme_bw(base_size=13) + labs(x = "PCo1", y = "PCo2")
+  theme_bw(base_size=13) + labs(x = "PCo1", y = "PCo2") +
+  scale_color_cherulean(palette = "cheridis", discrete = T)
 
 pcoa2 <- ggplot(data = pcoadt) +
   geom_point(aes(x = Axis.3, y = Axis.4, color = site_ID, shape = method), size = 3) +
-  theme_bw(base_size=13) + labs(x = "PCo3", y = "PCo4")
+  theme_bw(base_size=13) + labs(x = "PCo3", y = "PCo4") +
+  scale_color_cherulean(palette = "cheridis", discrete = T)
 
 (pcoa1|pcoa2) + plot_layout(guides = "collect")
 # I wonder if the scale of the abundances are affecting the scalings
@@ -172,11 +84,13 @@ ggplot(data=method_pcoa_rel$values[1:7,], aes(x=1:7, y=Relative_eig/sum(method_p
 relpcoadt <- as.data.frame(method_pcoa_rel$vectors) %>% bind_cols(., nmatrix_rel[1:2])
 relpcoa1 <- ggplot(data = relpcoadt) +
   geom_point(aes(x = Axis.1, y = Axis.2, color = site_ID, shape = method), size = 3) +
-  theme_bw(base_size=13) + labs(x = "PCo1", y = "PCo2", subtitle = "Scaled abundances")
+  theme_bw(base_size=13) + labs(x = "PCo1", y = "PCo2", subtitle = "Scaled abundances")+
+  scale_color_cherulean(palette = "cheridis", discrete = T)
 
 relpcoa2 <- ggplot(data = relpcoadt) +
   geom_point(aes(x = Axis.3, y = Axis.4, color = site_ID, shape = method), size = 3) +
-  theme_bw(base_size=13) + labs(x = "PCo3", y = "PCo4")
+  theme_bw(base_size=13) + labs(x = "PCo3", y = "PCo4")+
+  scale_color_cherulean(palette = "cheridis", discrete = T)
 
 (relpcoa1|relpcoa2) + plot_layout(guides = "collect")
 

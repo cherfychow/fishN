@@ -15,35 +15,47 @@ require(patchwork)
 require(lubridate)
 require(ggthemes)
 require(ggdist)
+source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/899dcfc1745421cb4e6ba26826b0bfe55fd8ec14/cherulean.R')
 
+# make sure size class is read as an ordered factor
+data_ruv$Size_class <- factor(data_ruv$Size_class, levels = c('_5', '5_9', '10_19', 
+                                                              '20_29', '30_39', '40_49', '50_59'), ordered = T)
+# some global pars
+looks = theme_classic(base_size = 13) + theme(axis.line = element_line(linewidth = 0.3),
+                                              axis.ticks = element_line(linewidth = 0.3))
+sites = 3
 
 # Raw data ----------------------------------------------------------------
 
+
 # visualise the distributions of staying time
-stay1 <- ggplot(data = data_ruv %>% filter(site_ID == 'hale_kaku')) +
-  geom_density(aes(x = staytime, fill = spsize), color = "white", alpha = 0.4) +
-  labs(x = "Staying time (s)", y = "Frequency", subtitle = "Hale Kaku") +
-  guides(fill = F) + scale_x_log10() + theme_bw()
 
-stay2 <- ggplot(data = data_ruv %>% filter(site_ID == 'hale_kinalea')) +
-  geom_density(aes(x = staytime, fill = spsize), color = "white", alpha = 0.4) +
-  labs(x = "Staying time (s)", y = "Frequency", subtitle = "Hale Kinalea") +
-  guides(fill = F) + scale_x_log10() + theme_bw()
+stay <- as.list(rep('', sites))
+for (i in 1:sites) {
+  stay[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i])) +
+    geom_density(aes(x = staytime, fill = spsize), color = "white", alpha = 0.4, linewidth = 0.4) +
+    labs(x = "Staying time (s)", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
+    guides(fill = F) + scale_x_log10() + looks +
+    scale_fill_cherulean(palette = 'cheridis', discrete = T)
+}
 
-stay1 + stay2
+stay[[1]] + stay[[2]] + stay[[3]]
 
 # distributions of detections
-detect1 <- ggplot(data = data_ruv %>% filter(site_ID == 'hale_kaku') %>% group_by(spsize, Camera) %>% summarise(detects = sum(Count))) +
-  geom_density(aes(x = detects, fill = spsize), color = "white", alpha = 0.4) +
-  labs(x = "Number of detections", y = "Frequency", subtitle = "Hale Kaku") +
-  guides(fill = F) + theme_bw() # + scale_x_log10()
 
-detect2 <- ggplot(data = data_ruv %>% filter(site_ID == 'hale_kinalea') %>% group_by(spsize, Camera) %>% summarise(detects = sum(Count))) +
-  geom_density(aes(x = detects, fill = spsize), color = "white", alpha = 0.4) +
-  labs(x = "Number of detections", y = "Frequency", subtitle = "Hale Kinalea") +
-  guides(fill = F) + theme_bw() # + scale_x_log10()
+detect <- as.list(rep('', sites))
+for (i in 1:sites) {
+  detect[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i]) %>% 
+                          group_by(spsize, Camera) %>% summarise(detects = sum(Count))) +
+    geom_density(aes(x = detects, fill = spsize), color = "white", alpha = 0.4) +
+    labs(x = "Number of detections", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
+    guides(fill = F) + looks +
+    scale_fill_cherulean(palette = 'cheridis', discrete = T) + scale_x_log10()
+}
 
-detect1 + detect2
+detect[[1]] + detect[[2]] + detect[[3]]
+(detect[[1]] + detect[[2]] + detect[[3]]) * scale_x_continuous()
+
 
 
 # REST estimates ---------------------------------------------------------
@@ -63,21 +75,18 @@ for (i in 2:length(boot_p)) {
 } # collapse bootstrap runs for each species-size into a long format dataframe
 rm(temp)
 
-D1 <- ggplot() +
-  stat_slab(data = bootD %>% filter(site_ID == 'hale_kaku'), 
-               aes(y = Taxon, x = boots, fill = Size_class), height = 6, alpha = 0.5) +
-  geom_pointrange(data = output_poisson %>% filter(site_ID == 'hale_kaku'), 
+densities <- ggplot() +
+  # stat_slab(data = bootD %>% filter(site_ID == 'hale_kaku'), 
+  #             aes(y = Taxon, x = boots, fill = Size_class), height = 6, alpha = 0.5) +
+  geom_pointrange(data = output_poisson, 
                   aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1) +
-  theme_bw() + labs(x = "Bootstrapped density", y = "Species", subtitle = "Hale Kaku") +
-  theme(legend.position = "bottom")
-
-D2 <- ggplot() +
-  stat_slab(data = bootD %>% filter(site_ID == 'hale_kinalea'), 
-            aes(y = Taxon, x = boots, fill = Size_class), height = 6, alpha = 0.5) +
-  geom_pointrange(data = output_poisson %>% filter(site_ID == 'hale_kinalea'), 
-                  aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1) +
-  theme_bw() + labs(x = "Bootstrapped density", y = "Species", subtitle = "Hale Kinalea") +
-  theme(legend.position = "bottom")
+  labs(x = "Bootstrapped density", y = "Species") +
+  theme(legend.position = "bottom") + looks +
+  # scale_fill_cherulean(palette = 'cheridis', discrete = T) +
+  scale_colour_cherulean(palette = 'cheridis', discrete = T) +
+  facet_grid(cols = vars(site_ID)) + scale_x_log10(breaks = c(0, 0.1, 1, 5, 10, 50, 100),
+                                                   labels = c(0, 0.1, 1, 5, 10, 50, 100))
+densities
 
 # raincloud of modelled densities
 
@@ -92,7 +101,7 @@ D2 <- ggplot() +
 #   theme_bw() + labs(x = "Estimated density", y = "Species", subtitle = "Hale Kinalea") + 
 #   theme(legend.position = "bottom")
 
-D1 + D2
+D1 + D2 + plot_layout(guides = 'collect')
 
 (D1 + D2) * coord_cartesian(xlim = c(0,5)) # look at the non-outlier distributions
 

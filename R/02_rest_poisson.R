@@ -22,8 +22,8 @@ data_ruv$staytime <- with(data_ruv, exittime_c - entrytime_c) %>% as.numeric
 ## define some global parameters
 # site-camera key
 sitecam <- distinct(data_ruv, site_ID, Camera)
-sites = 2
-cams = c(4,3) # in the order of sites shown in unique(data_ruv$site_ID)
+sites = 3
+cams = c(4,3,4) # in the order of sites shown in unique(data_ruv$site_ID)
 # because the model loop runs on data_ruv
 
 # make a reference vector for species that REST can run on
@@ -37,7 +37,7 @@ less5 <- data_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurre
   filter(occurrences < 5) %>% nrow
 # total species size class
 spsize <- data_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% nrow
-less5/spsize
+less5/spsize # 0.4545
 
 rm(less5, spsize)
 
@@ -217,7 +217,7 @@ if (length(which(is.na(output_poisson$shape_se) & output_poisson$estPar == 3)) >
     output_poisson$estPar[i] <- 2
     output_poisson$scaleT[i] <- 1 # correctly fill in the parameter
   }
-
+}
 beep()
 
 # recalculate variances for those shit outliers
@@ -297,5 +297,5 @@ output_poisson <- data_ruv %>%
 output_poisson$AICc <- with(output_poisson, 2*estPar - 2*log(Lvalue) + ((2*estPar^2 + 2*estPar) / (detects - estPar - 1)))
 
 # export outputs
-write.csv(output_poisson, "../outputs/REST_poisson2.csv", row.names = F)
+write.csv(output_poisson, "../outputs/REST_final.csv", row.names = F)
 data_ruv$spsize <- with(data_ruv, paste(Taxon, Size_class, sep = "_"))
