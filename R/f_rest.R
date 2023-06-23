@@ -81,11 +81,10 @@ densities <- ggplot() +
   geom_pointrange(data = output_poisson, 
                   aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1) +
   labs(x = "Bootstrapped density", y = "Species") +
-  theme(legend.position = "bottom") + looks +
-  # scale_fill_cherulean(palette = 'cheridis', discrete = T) +
+  theme(legend.position = "bottom") + theme_linedraw(base_size = 13) + 
   scale_colour_cherulean(palette = 'cheridis', discrete = T) +
-  facet_grid(cols = vars(site_ID)) + scale_x_log10(breaks = c(0, 0.1, 1, 5, 10, 50, 100),
-                                                   labels = c(0, 0.1, 1, 5, 10, 50, 100))
+  facet_grid(cols = vars(site_ID)) + scale_x_log10(breaks = c(0, 0.1, 1, 10, 100),
+                                                   labels = c(0, 0.1, 1, 10, 100))
 densities
 
 # raincloud of modelled densities
@@ -100,10 +99,6 @@ densities
 #   geom_pointrange(aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1.5) +
 #   theme_bw() + labs(x = "Estimated density", y = "Species", subtitle = "Hale Kinalea") + 
 #   theme(legend.position = "bottom")
-
-D1 + D2 + plot_layout(guides = 'collect')
-
-(D1 + D2) * coord_cartesian(xlim = c(0,5)) # look at the non-outlier distributions
 
 
 # Compare method abundances -----------------------------------------------

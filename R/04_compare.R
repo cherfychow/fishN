@@ -12,7 +12,7 @@ require(stringr)
 require(ape)
 require(ggplot2)
 require(patchwork)
-source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/2e5525b9eda707989b2018c55625870d1aaa3f40/cherulean.R')
+source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/bb52c82ecea1ebf0e87340b37d9b86aead7debb6/cherulean.R')
 
 ###############################################
 # PCOA COMPARISON -----------------------------------------------------------------
