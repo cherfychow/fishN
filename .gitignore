@@ -46,3 +46,5 @@ vignettes/*.pdf
 *.svg
 
 .DS_Store
+
+*.eps

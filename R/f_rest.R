@@ -33,10 +33,11 @@ sites = 3
 stay <- as.list(rep('', sites))
 for (i in 1:sites) {
   stay[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i])) +
-    geom_density(aes(x = staytime, fill = spsize), color = "white", alpha = 0.4, linewidth = 0.4) +
+    geom_density(aes(x = staytime, fill = spsize, color = spsize), alpha = 0.4, linewidth = 0.4) +
     labs(x = "Staying time (s)", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
-    guides(fill = F) + scale_x_log10() + looks +
-    scale_fill_cherulean(palette = 'cheridis', discrete = T)
+    guides(fill = F, color = F) + scale_x_log10() + looks +
+    scale_fill_cherulean(palette = 'gomphosus', discrete = T) +
+    scale_color_cherulean(palette = 'gomphosus', discrete = T)
 }
 
 stay[[1]] + stay[[2]] + stay[[3]]
@@ -47,10 +48,11 @@ detect <- as.list(rep('', sites))
 for (i in 1:sites) {
   detect[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i]) %>% 
                           group_by(spsize, Camera) %>% summarise(detects = sum(Count))) +
-    geom_density(aes(x = detects, fill = spsize), color = "white", alpha = 0.4) +
+    geom_density(aes(x = detects, fill = spsize, color = spsize), alpha = 0.4) +
     labs(x = "Number of detections", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
-    guides(fill = F) + looks +
-    scale_fill_cherulean(palette = 'cheridis', discrete = T) + scale_x_log10()
+    guides(fill = F, color = F) + scale_x_log10() + looks +
+    scale_fill_cherulean(palette = 'gomphosus', discrete = T) +
+    scale_color_cherulean(palette = 'gomphosus', discrete = T)
 }
 
 detect[[1]] + detect[[2]] + detect[[3]]
@@ -75,6 +77,11 @@ for (i in 2:length(boot_p)) {
 } # collapse bootstrap runs for each species-size into a long format dataframe
 rm(temp)
 
+pretty <- c('^\\_' = '\\< ', '(?<=[:digit:])\\_' = '\\-')
+output_poisson$Size_class <- str_replace_all(output_poisson$Size_class, pretty) %>% 
+  factor(., levels = c('< 5', '5-9', '10-19', 
+                       '20-29', '30-39'), ordered = T)
+
 densities <- ggplot() +
   # stat_slab(data = bootD %>% filter(site_ID == 'hale_kaku'), 
   #             aes(y = Taxon, x = boots, fill = Size_class), height = 6, alpha = 0.5) +
@@ -82,7 +89,7 @@ densities <- ggplot() +
                   aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1) +
   labs(x = "Bootstrapped density", y = "Species") +
   theme(legend.position = "bottom") + theme_linedraw(base_size = 13) + 
-  scale_colour_cherulean(palette = 'cheridis', discrete = T) +
+  scale_colour_cherulean(palette = 'cheridis', discrete = T, name = "Size class (cm)") +
   facet_grid(cols = vars(site_ID)) + scale_x_log10(breaks = c(0, 0.1, 1, 10, 100),
                                                    labels = c(0, 0.1, 1, 10, 100))
 densities
