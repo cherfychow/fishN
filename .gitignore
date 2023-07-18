@@ -1,8 +1,12 @@
 # Mac ignores
 *._*
+.DS_Store
 
 # pre-cleaning data files
 data/notcleaned/
+
+# ignore outputs
+outputs/
 
 # History files
 .Rhistory
@@ -41,10 +45,11 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
-# ignore RMD outputs
+
+# ignore Rmd outputs
 *.html
 *.svg
 
-.DS_Store
 
-*.eps
+
+

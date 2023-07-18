@@ -33,7 +33,7 @@ data_rest <- data_ruv %>% distinct(site_ID, Taxon, Size_class, spsize) %>%
 
 # cross-method comparison doesn't have to deal with size classes
 # construct the community matrix
-nmatrix <- data_uvc %>% filter(str_detect(site_ID, 'kinalea|kaku|sunset')) %>% 
+nmatrix <- data_uvc %>% filter(str_detect(site_ID, 'hinalea|kaku|sunset')) %>% 
   group_by(site_ID, Taxon) %>% summarise(n = sum(count)) %>% mutate(method = 'uvc') %>% ungroup # filter and aggregate UVC
 nmatrix <- data_rest %>% group_by(site_ID, Taxon) %>% 
   summarise(n = sum(D, na.rm = T)) %>% mutate(method = 'rest') %>% ungroup %>% filter(!is.na(n), !n == 0) %>% 
@@ -60,7 +60,7 @@ ggplot(data=method_pcoa$values[1:7,], aes(x=1:7, y=Relative_eig/sum(method_pcoa$
 pcoadt <- as.data.frame(method_pcoa$vectors) %>% bind_cols(., nmatrix[1:2])
 
 f_pcoa1 <- ggplot(data = pcoadt) +
-  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID), alpha = 0.5) +
+  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo1", y = "PCo2") +
   scale_color_cherulean(palette = 'cheridis', discrete = T, name = 'Site') +
@@ -68,13 +68,13 @@ f_pcoa1 <- ggplot(data = pcoadt) +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
 f_pcoa2 <- ggplot(data = pcoadt) +
-  geom_polygon(aes(x = Axis.3, y = Axis.4, fill = site_ID), alpha = 0.5) +
+  geom_polygon(aes(x = Axis.3, y = Axis.4, fill = site_ID)) +
   geom_point(aes(x = Axis.3, y = Axis.4, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo3", y = "PCo4") +
   scale_fill_cherulean(palette = 'cheridis', discrete = T, name = 'Site')+
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
-(f_pcoa1|f_pcoa2) + plot_layout(guides = "collect")
+# (f_pcoa1|f_pcoa2) + plot_layout(guides = "collect")
 # I wonder if the scale of the abundances are affecting the scalings
 
 nmatrix_rel <- apply(nmatrix[-(1:2)], 1, function(x) x/sum(x)) %>% t %>% as.data.frame
@@ -92,21 +92,20 @@ ggplot(data=method_pcoa_rel$values[1:7,], aes(x=1:7, y=Relative_eig/sum(method_p
 
 relpcoadt <- as.data.frame(method_pcoa_rel$vectors) %>% bind_cols(., nmatrix_rel[1:2])
 f_relpcoa1 <- ggplot(data = relpcoadt) +
-  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID), alpha = 0.5) +
+  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo1", y = "PCo2")+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
 f_relpcoa2 <- ggplot(data = relpcoadt) +
-  geom_polygon(aes(x = Axis.3, y = Axis.4, fill = site_ID), alpha = 0.5) +
+  geom_polygon(aes(x = Axis.3, y = Axis.4, fill = site_ID)) +
   geom_point(aes(x = Axis.3, y = Axis.4, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo3", y = "PCo4")+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
-f_relpcoa <- (f_relpcoa1|f_relpcoa2) + plot_layout(guides = "collect")
-f_relpcoa
+((f_pcoa1/f_pcoa2) | (f_relpcoa1/f_relpcoa2)) + plot_layout(guides = "collect")
 
 ###############################################
 # COMPARE ASSEMBLAGES BETWEEN CAMERAS ---------------------------------------
@@ -147,18 +146,18 @@ convhull_cam[[2]] <- bind_rows(convhull_cam[[2]])
 
 f_maxncam <- as.list(rep(NA,3))
 f_maxncam[[1]] <- ggplot(data = dt_maxnpcoa) +
-  geom_polygon(data = convhull_cam[[1]], alpha = 0.3, color = 'grey50', 
+  geom_polygon(data = convhull_cam[[1]], 
                aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID), size = 3, shape = 21) +
   looks + labs(x = "PCo1", y = "PCo2")+
-  scale_fill_cherulean(palette = "gomphosus", discrete = T, name = 'Site')
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = 'Site')
 
 f_maxncam[[2]] <- ggplot(data = dt_maxnpcoa) +
-  geom_polygon(data = convhull_cam[[2]], alpha = 0.3, color = 'grey50',
+  geom_polygon(data = convhull_cam[[2]],
                aes(x = Axis.3, y = Axis.4, fill = site_ID)) +
   geom_point(aes(x = Axis.3, y = Axis.4, fill = site_ID), size = 3, shape = 21) +
   looks + labs(x = "PCo3", y = "PCo4")+
-  scale_fill_cherulean(palette = "gomphosus", discrete = T, name = 'Site')
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = 'Site')
 
 (f_maxncam[[1]]|f_maxncam[[2]]) + plot_layout(guides = "collect")
 
@@ -173,7 +172,7 @@ dt_allmethods <- data_maxn %>% group_by(site_ID, Taxon, Size_class) %>% summaris
   full_join(., data_rest[-4], by = c('site_ID', 'Taxon', 'Size_class')) %>% 
   rename(., REST = D)
 dt_allmethods <- data_uvc %>% group_by(site_ID, Taxon, Size_class) %>% 
-  summarise(UVC = sum(count)) %>% ungroup() %>% filter(str_detect(site_ID, 'kaku|kinalea|sunset')) %>% 
+  summarise(UVC = sum(count)) %>% ungroup() %>% filter(str_detect(site_ID, 'kaku|hinalea|sunset')) %>% 
   full_join(., dt_allmethods, by = c('site_ID', 'Taxon', 'Size_class'))
 
 # replace NAs with 0s
@@ -234,37 +233,47 @@ ggplot(dt_all_size) +
   facet_wrap(vars(site_ID))
 
 pairs(dt_allmethods[,4:6], log = 'xy', pch = 1:7, cex = 1.2)
-# kinalea
-pairs(dt_allmethods[dt_allmethods$site_ID == 'hale_kinalea', 4:6], log = 'xy', pch = 1:7, cex = 1.2)
+# hinalea
+pairs(dt_allmethods[dt_allmethods$site_ID == 'hale_hinalea', 4:6], log = 'xy', pch = 1:7, cex = 1.2)
 
+###############################################
+## TALLIES --------------------------------------------
 # exclusive species check
+
 # calculate the "absences" by method
 dt_all_long %>% group_by(method, site_ID, Taxon) %>% summarise(n = sum(n)) %>% # aggregate size classes
   ungroup() %>% group_by(method, site_ID) %>% 
-  summarise(absences = length(which(n == 0)))
-n_distinct(dt_allmethods$Taxon)
-# UVC exclusives
-temp <- dt_allmethods %>% group_by(site_ID, Taxon) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))
-temp %>% filter(REST == 0, MaxN == 0, UVC > 0) %>% pull(Taxon) %>% n_distinct
-# video/MaxN exclusives
-# MaxN + REST presence/absences are the same since they're nested data.
-temp %>% filter(UVC == 0) %>% pull(Taxon) %>% n_distinct
+  summarise(absences = length(which(n == 0))) %>% ungroup %>% group_by(method) %>% 
+  summarise(meanMiss = mean())
+
+# not splitting by site
+temp <- dt_allmethods %>% group_by(Taxon) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))
+n_distinct(temp$Taxon)
+
+# EXCLUSIVES
+temp %>% filter(MaxN == 0 & UVC > 0) %>% pull(Taxon) %>% n_distinct #UVC
+temp %>% filter(UVC == 0 & MaxN > 0) %>% pull(Taxon) %>% n_distinct # video
+# overlaps, video uvc
+temp %>% filter(MaxN > 0, UVC > 0) %>% pull(Taxon) %>% n_distinct
+temp %>% filter(MaxN > 0, UVC > 0, REST > 0) %>% pull(Taxon) %>% n_distinct
+
+
 # overlaps
-temp %>% filter(UVC > 0, (REST > 0 | MaxN > 0)) %>% 
-  summarise(overlaps = n()) # video vs UVC
-temp %>% ungroup() %>% filter(UVC > 0, MaxN > 0) %>% 
- pull(Taxon) %>% n_distinct # video vs UVC
-temp %>% filter(UVC > 0, REST > 0, MaxN == 0) %>% 
-  ungroup(Taxon) %>% summarise(overlaps = n()) # REST vs UVC
+temp %>% filter(UVC > 0 & MaxN > 0) %>% 
+  summarise(overlaps = n()) # overlaps in video and uvc, by site
+temp %>% ungroup() %>% filter(UVC > 0 & MaxN > 0) %>% 
+ pull(Taxon) %>% n_distinct # overlap total video-uvc
+
 temp %>% filter(MaxN > 0, REST == 0, UVC > 0) %>% View # maxN + UVC
 temp %>% filter(MaxN > 0, REST > 0, UVC > 0) %>% 
   ungroup(Taxon) %>% summarise(overlaps = n()) # all
-temp %>% filter(MaxN > 0, REST > 0, UVC > 0) %>% 
-  ungroup(Taxon) %>% pull(Taxon) %>% n_distinct # all
+
+
 rm(temp)
 # Species richness per method
 dt_all_long %>% group_by(site_ID, method) %>% filter(n > 0) %>% summarise(S = length(unique(Taxon)))
-
+temp <- dt_allmethods %>% group_by(site_ID, Taxon) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))
+temp %>% filter(REST == 0, MaxN > 0) %>% summarise(missedsp = n_distinct(Taxon))
 
 ###############################################
 ## Fit GLMs --------------------------------------------
@@ -332,3 +341,25 @@ f_modelpairs[[3]] <- ggplot(dt_allmethods) +
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 (f_modelpairs[[1]] + f_modelpairs[[2]] + f_modelpairs[[3]]) * looks + plot_layout(guides = "collect")
+
+
+###############################################
+## SACs --------------------------------------------
+# do it on size aggregated data
+temp <- dt_all_long %>% group_by(site_ID, method) %>% summarise(totaln = sum(n))
+# add relative abundances
+dt_all_long <- left_join(dt_all_long, temp, by = c("site_ID", "method")) %>% 
+  mutate(reln = n/totaln) %>% select(!totaln)
+
+ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Taxon) %>% 
+         summarise(reln = sum(reln))) +
+  geom_density(aes(x = reln, color = method), linewidth = 0.75) +
+  labs(x = 'Abundances', y = "Species frequency") + looks +
+  scale_color_cherulean(palette = "cheridis", discrete = T, name = 'Method')
+
+ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Taxon) %>% 
+         summarise(reln = sum(reln))) +
+  geom_density(aes(x = reln, color = method), linewidth = 0.5) +
+  labs(x = 'Abundances', y = "Species frequency") + looks +
+  scale_color_cherulean(palette = "gomphosus", discrete = T, name = 'Method') +
+  facet_wrap(vars(site_ID))

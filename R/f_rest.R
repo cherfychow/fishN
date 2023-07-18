@@ -33,30 +33,23 @@ sites = 3
 stay <- as.list(rep('', sites))
 for (i in 1:sites) {
   stay[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i])) +
-    geom_density(aes(x = staytime, fill = spsize, color = spsize), alpha = 0.4, linewidth = 0.4) +
+    geom_density(aes(x = staytime, group = spsize), fill = 'darkturquoise', color = 'deepskyblue4', linewidth = 0.5) +
     labs(x = "Staying time (s)", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
-    guides(fill = F, color = F) + scale_x_log10() + looks +
-    scale_fill_cherulean(palette = 'gomphosus', discrete = T) +
-    scale_color_cherulean(palette = 'gomphosus', discrete = T)
+    guides(fill = F, color = F) + scale_x_log10() + looks
 }
-
-stay[[1]] + stay[[2]] + stay[[3]]
 
 # distributions of detections
 
 detect <- as.list(rep('', sites))
 for (i in 1:sites) {
   detect[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i]) %>% 
-                          group_by(spsize, Camera) %>% summarise(detects = sum(Count))) +
-    geom_density(aes(x = detects, fill = spsize, color = spsize), alpha = 0.4) +
+                          group_by(spsize, uniqueCam) %>% summarise(detects = sum(Count))) +
+    geom_density(aes(x = detects, group = uniqueCam), fill = 'darkseagreen', color = 'darkgreen', linewidth = 0.5) +
     labs(x = "Number of detections", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
-    guides(fill = F, color = F) + scale_x_log10() + looks +
-    scale_fill_cherulean(palette = 'gomphosus', discrete = T) +
-    scale_color_cherulean(palette = 'gomphosus', discrete = T)
+    guides(fill = F, color = F) + scale_x_log10() + looks
 }
 
-detect[[1]] + detect[[2]] + detect[[3]]
-(detect[[1]] + detect[[2]] + detect[[3]]) * scale_x_continuous()
+(detect[[1]] + detect[[2]] + detect[[3]])/(stay[[1]] + stay[[2]] + stay[[3]])
 
 
 
