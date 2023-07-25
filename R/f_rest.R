@@ -28,13 +28,14 @@ sites = 3
 # Raw data ----------------------------------------------------------------
 
 
-# visualise the distributions of staying time
-
+# visualise the distributions of Duration
+temp <- data_ruv %>% group_by(spsize, uniqueCam) %>% summarise(detects = sum(Count)) %>%
+  right_join(., data_ruv, by = c('spsize', 'uniqueCam'))
 stay <- as.list(rep('', sites))
 for (i in 1:sites) {
-  stay[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i])) +
-    geom_density(aes(x = staytime, group = spsize), fill = 'darkturquoise', color = 'deepskyblue4', linewidth = 0.5) +
-    labs(x = "Staying time (s)", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
+  stay[[i]] <- ggplot(data = temp %>% filter(site_ID == unique(data_ruv$site_ID)[i])) +
+    geom_density(aes(x = staytime, group = spsize), fill = 'deepskyblue2') +
+    labs(x = "Duration (s)", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
     guides(fill = F, color = F) + scale_x_log10() + looks
 }
 
@@ -44,13 +45,17 @@ detect <- as.list(rep('', sites))
 for (i in 1:sites) {
   detect[[i]] <- ggplot(data = data_ruv %>% filter(site_ID == unique(data_ruv$site_ID)[i]) %>% 
                           group_by(spsize, uniqueCam) %>% summarise(detects = sum(Count))) +
-    geom_density(aes(x = detects, group = uniqueCam), fill = 'darkseagreen', color = 'darkgreen', linewidth = 0.5) +
+    geom_density(aes(x = detects, group = uniqueCam), fill = 'goldenrod') +
     labs(x = "Number of detections", y = "Frequency", subtitle = unique(data_ruv$site_ID)[i]) +
     guides(fill = F, color = F) + scale_x_log10() + looks
 }
 
 (detect[[1]] + detect[[2]] + detect[[3]])/(stay[[1]] + stay[[2]] + stay[[3]])
 
+
+ggplot(data = temp) +
+  geom_point(aes(x = detects, y = staytime), shape = 21) + looks +
+  scale_x_log10() + scale_y_log10()
 
 
 # REST estimates ---------------------------------------------------------
@@ -85,7 +90,7 @@ densities <- ggplot() +
   scale_colour_cherulean(palette = 'cheridis', discrete = T, name = "Size class (cm)") +
   facet_grid(cols = vars(site_ID)) + scale_x_log10(breaks = c(0, 0.1, 1, 10, 100),
                                                    labels = c(0, 0.1, 1, 10, 100))
-densities
+densities + theme(legend.position = 'bottom')
 
 # raincloud of modelled densities
 

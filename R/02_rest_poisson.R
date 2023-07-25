@@ -11,13 +11,15 @@ require(beepr)
 # custom palettes to be extra
 source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/899dcfc1745421cb4e6ba26826b0bfe55fd8ec14/cherulean.R')
 
-data_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
+# data_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
 
 # convert this to a lubridate duration data type
 data_ruv$entrytime_c <- ms(data_ruv$Time_entry) %>% as.duration
 data_ruv$exittime_c <- ms(data_ruv$Time_exit) %>% as.duration
 # calculate staying time duration
 data_ruv$staytime <- with(data_ruv, exittime_c - entrytime_c) %>% as.numeric
+summary(data_ruv)
+data_ruv <- data_ruv %>% filter(staytime > 0) # remove any zero second occurrences
 
 ## define some global parameters
 # site-camera key

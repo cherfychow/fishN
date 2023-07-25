@@ -16,9 +16,9 @@ source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067
 
 ###############################################
 # PCOA COMPARISON -----------------------------------------------------------------
-sdf
-data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
+# data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
 # prep REST to match the assemblage survey data like RUV or MaxN
+set.seed(24)
 
 data_uvc$Size_class[data_uvc$TL_cm <= 5] <- "_5"
 data_uvc$Size_class[data_uvc$TL_cm > 5 & data_uvc$TL_cm <= 10] <- "5_9"
@@ -111,12 +111,17 @@ f_relpcoa2 <- ggplot(data = relpcoadt) +
 # COMPARE ASSEMBLAGES BETWEEN CAMERAS ---------------------------------------
 # compare the assemblage composition with PCoA between MaxN cameras
 
-nmatrix_max <- data_maxn %>% group_by(site_ID, Camera, Taxon) %>% summarise(n = sum(MaxN)) %>% ungroup
-nmatrix_max <- nmatrix_max %>% tidyr::pivot_wider(names_from = Taxon, values_from = n) %>% 
+nmatrix_cam <- data_maxn %>% group_by(site_ID, Camera, Taxon) %>% 
+  summarise(n = sum(MaxN)) %>% ungroup %>% mutate(method = 'maxn')
+nmatrix_cam <- data_uvc %>% group_by(site_ID, transect_point, Taxon) %>% 
+  filter(str_detect(site_ID, 'sunset|kaku|hinalea')) %>% 
+  summarise(count = sum(count)) %>% ungroup %>% mutate(method = 'point') %>% 
+  rename(n = count, Camera = transect_point) %>% rbind(nmatrix_cam, .)
+nmatrix_cam <- nmatrix_cam %>% tidyr::pivot_wider(names_from = Taxon, values_from = n) %>% 
   replace(is.na(.), 0) # replace NAs with 0
 
-dis_maxn <- vegdist(nmatrix_max[-(1:2)], method = "euclidean", diag = F, binary = F)
-pcoa_maxn <- ape::pcoa(dis_maxn, correction = "none", rn = paste(nmatrix_max$site_ID, nmatrix_max$Camera, sep="_"))
+dis_maxn <- vegdist(nmatrix_cam[-(1:3)], method = "euclidean", diag = F, binary = F)
+pcoa_maxn <- ape::pcoa(dis_maxn, correction = "none", rn = paste(nmatrix_cam$site_ID, nmatrix_cam$Camera, sep="_"))
 biplot(pcoa_maxn)
 
 # check scree
@@ -128,7 +133,7 @@ ggplot(data=pcoa_maxn$values[1:7,], aes(x=1:7, y=Cumul_eig)) +
 # 4 dimensions is ok
 ## Plot PCoA results
 
-dt_maxnpcoa <- as.data.frame(pcoa_maxn$vectors) %>% bind_cols(., nmatrix_max[1:2])
+dt_maxnpcoa <- as.data.frame(pcoa_maxn$vectors) %>% bind_cols(., nmatrix_cam[1:3])
 # calculate convex hulls per site
 convhull_cam <- list(as.list(rep(NA, 3)), as.list(rep(NA, 3)))
 for (i in 1:3) {
@@ -221,7 +226,7 @@ for (i in 1:nrow(totals)) {
   dt_all_size$n[with(dt_all_size, site_ID == totals$site_ID[i] & method == totals$method[i])] <- dt_all_size$n[with(dt_all_size, site_ID == totals$site_ID[i] & method == totals$method[i])]/totals$total[i]
 }
 
-dt_all_size$midSize <- str_extract(dt_all_size$Size_class, '(?<=\\_)[:digit:]+$') %>% 
+dt_all_size$midSize <- str_extract(dt_all_size$Size_class, '(?<=\\-|(\\<\\s))[:digit:]+$') %>% 
   as.numeric
 dt_all_size$midSize[dt_all_size$midSize > 5] <- dt_all_size$midSize[dt_all_size$midSize > 5] -4
 dt_all_size$midSize[dt_all_size$midSize == 5] <- dt_all_size$midSize[dt_all_size$midSize == 5] - 2.5
@@ -244,7 +249,7 @@ pairs(dt_allmethods[dt_allmethods$site_ID == 'hale_hinalea', 4:6], log = 'xy', p
 dt_all_long %>% group_by(method, site_ID, Taxon) %>% summarise(n = sum(n)) %>% # aggregate size classes
   ungroup() %>% group_by(method, site_ID) %>% 
   summarise(absences = length(which(n == 0))) %>% ungroup %>% group_by(method) %>% 
-  summarise(meanMiss = mean())
+  summarise(meanMiss = mean(absences))
 
 # not splitting by site
 temp <- dt_allmethods %>% group_by(Taxon) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))

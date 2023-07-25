@@ -4,7 +4,7 @@
 ## FishN: comparing fish assemblage abundance surveying methods
 # Calculate MaxN
 
-data_ruv <- data_ruv %>% select(!c(Observer, VidFile, X))
+data_ruv <- data_ruv %>% select(!c(Observer, VidFile))
 
 # turn the timestamps into intervals with a dummy date to make timestamps fake "dates"
 data_ruv$interval <- with(data_ruv, interval(start = paste0("2022-11-01 12:", Time_entry) %>% ymd_hms(), 
