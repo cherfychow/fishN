@@ -112,15 +112,11 @@ f_relpcoa2 <- ggplot(data = relpcoadt) +
 # compare the assemblage composition with PCoA between MaxN cameras
 
 nmatrix_cam <- data_maxn %>% group_by(site_ID, Camera, Taxon) %>% 
-  summarise(n = sum(MaxN)) %>% ungroup %>% mutate(method = 'maxn')
-nmatrix_cam <- data_uvc %>% group_by(site_ID, transect_point, Taxon) %>% 
-  filter(str_detect(site_ID, 'sunset|kaku|hinalea')) %>% 
-  summarise(count = sum(count)) %>% ungroup %>% mutate(method = 'point') %>% 
-  rename(n = count, Camera = transect_point) %>% rbind(nmatrix_cam, .)
+  summarise(n = sum(MaxN)) %>% ungroup
 nmatrix_cam <- nmatrix_cam %>% tidyr::pivot_wider(names_from = Taxon, values_from = n) %>% 
   replace(is.na(.), 0) # replace NAs with 0
 
-dis_maxn <- vegdist(nmatrix_cam[-(1:3)], method = "euclidean", diag = F, binary = F)
+dis_maxn <- vegdist(nmatrix_cam[-(1:2)], method = "euclidean", diag = F, binary = F)
 pcoa_maxn <- ape::pcoa(dis_maxn, correction = "none", rn = paste(nmatrix_cam$site_ID, nmatrix_cam$Camera, sep="_"))
 biplot(pcoa_maxn)
 
@@ -133,7 +129,7 @@ ggplot(data=pcoa_maxn$values[1:7,], aes(x=1:7, y=Cumul_eig)) +
 # 4 dimensions is ok
 ## Plot PCoA results
 
-dt_maxnpcoa <- as.data.frame(pcoa_maxn$vectors) %>% bind_cols(., nmatrix_cam[1:3])
+dt_maxnpcoa <- as.data.frame(pcoa_maxn$vectors) %>% bind_cols(., nmatrix_cam[1:2])
 # calculate convex hulls per site
 convhull_cam <- list(as.list(rep(NA, 3)), as.list(rep(NA, 3)))
 for (i in 1:3) {
