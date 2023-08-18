@@ -124,9 +124,9 @@ allN <- data_uvc %>% filter(str_detect(site_ID, 'kinalea|kaku')) %>%
 allN <- data_rest %>% group_by(site_ID, Taxon) %>% 
   summarise(n = sum(D, na.rm = T)) %>% mutate(method = 'rest') %>% ungroup %>% filter(!is.na(n), !n == 0) %>% 
   bind_rows(allN, .)
-allN <- data_rest %>% group_by(site_ID, Taxon) %>% 
-  summarise(n = sum(combinedD, na.rm = T)) %>% mutate(method = 'restmax') %>% ungroup %>% filter(!is.na(n)) %>% 
-  bind_rows(allN, .)
+# allN <- data_rest %>% group_by(site_ID, Taxon) %>% 
+#   summarise(n = sum(combinedD, na.rm = T)) %>% mutate(method = 'restmax') %>% ungroup %>% filter(!is.na(n)) %>% 
+#   bind_rows(allN, .)
 allN <- data_maxn %>% group_by(site_ID, Taxon) %>% summarise(n = sum(MaxN, na.rm = T)) %>% ungroup %>% 
   mutate(method = 'maxN') %>% bind_rows(allN, .)
 

@@ -1,0 +1,51 @@
+Species,Type,a,b,inverse,LLa,LLb,Notes
+Abudefduf abdominalis,FL,0.0369,3.13,1,0,1.155640006,
+Abudefduf sordidus,FL,0.0358,3.18,1,0,1.07395401,
+Abudefduf vaigiensis,TL,0.00989,3.267,0,NA,NA,
+Acanthurus blochii,FL,0.0219,3.07,1,0,1.087863326,
+Acanthurus triostegus,FL,0.0361,3.13,1,0,1.025649995,
+Acanthurus xanthopterus,FL,0.0459,2.83,1,0,1.112129986,
+Aulostomus chinensis,TL,1.00E-04,3.793,0,NA,NA,
+Calotomus carolinus,TL,0.0091,3.28,0,NA,NA,
+Canthigaster jactator,TL,0.02658,3,0,NA,NA,
+Caranx melampygus,FL,0.0335,3.07,1,0.810000022,1.072796702,
+Centropyge potteri,TL,0.02873,3,0,NA,NA,
+Cephalopholis argus,TL,0.0119,3.13,0,NA,NA,
+Chaetodon auriga,TL,0.0312,2.953,0,NA,NA,
+Chaetodon ephippium,TL,0.023,3.04,0,NA,NA,
+Chaetodon lunulatus,TL,0.24099,2.099,0,NA,NA,
+Chaetodon miliaris,SL,0.042,3,0,0,0.835615993,
+Chaetodon unimaculatus,TL,0.02818,3,0,NA,NA,bayesian estimates
+Chlorurus perspicillatus,TL,0.02039,3,0,NA,NA,
+Chlorurus spilurus,TL,0.02,3.04,0,NA,NA,from C. sordidus record in Guam
+Ctenochaetus strigosus,TL,0.00601,3.379,0,NA,NA,
+Dascyllus albisella,TL,0.03028,3,0,NA,NA,
+Diodon hystrix,TL,0.532,2.276,0,NA,NA,
+Gomphosus varius,TL,2.00E-04,3.378,0,NA,NA,
+Lutjanus fulvus,FL,0.0333,3.09,1,0,1.038954973,
+Mulloidichthys flavolineatus,TL,0.00886,3.0602,0,NA,NA,
+Mulloidichthys vanicolensis,TL,0.0029,3.4244,0,NA,NA,
+Naso brevirostris,SL,0.0602,2.743,0,0.273301989,0.842238516,
+Neoniphon sammara,TL,0.00489,3.379,0,NA,NA,
+Oxycheilinus unifasciatus,TL,0.01687,3,0,NA,NA,
+Parupeneus insularis,TL,0.01122,3.13,0,NA,NA,bayesian estimates
+Parupeneus multifasciatus,TL,0.02232,3.125,0,NA,NA,
+Scarus psittacus,TL,0.0189,3.03,0,NA,NA,
+Scomberoides lysan,FL,0.0491,2.64,0,0,0.828000009,
+Thalassoma duperrey,TL,0.0155,2.89,0,NA,NA,
+Thalassoma purpureum,TL,0.02593,3,0,NA,NA,
+Tylosurus crocodilus,TL,0.00208,2.963,0,NA,NA,
+Zanclus cornutus,TL,0.01738,3.06,0,NA,NA,bayesian estimates
+Zebrasoma flavescens,TL,0.0286,2.94,0,NA,NA,
+Zebrasoma velifer,TL,0.02512,2.93,0,NA,NA,bayesian estimates
+Bodianus albotaeniatus,TL,0.01202,3.05,0,NA,NA,bayesian estimates
+Chaetodon lineolatus,TL,0.02344,2.94,0,NA,NA,bayesian estimates
+Chaetodon lunula,TL,0.02344,3,0,NA,NA,bayesian estimates
+Labroides phthirophagus,TL,0.00955,3.07,0,NA,NA,bayesian estimates
+Acanthurus nigroris,TL,0.02291,2.96,0,NA,NA,bayesian estimates
+Plectroglyphidodon marginatus,TL,0.01259,3.04,0,NA,NA,bayesian estimates
+Sargocentron xantherythrum,TL,0.01585,2.98,0,NA,NA,bayesian estimates
+Stethojulis balteata,TL,0.00977,3.07,0,NA,NA,bayesian estimates
+Thalassoma trilobatum,TL,0.00955,3.06,0,NA,NA,bayesian estimates
+Acanthurus sp1,TL,0.02291,2.96,0,NA,NA,bayesian estimates
+Thalassoma sp,TL,0.00955,3.06,0,NA,NA,bayesian estimates

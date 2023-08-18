@@ -14,9 +14,16 @@ require(ggplot2)
 require(patchwork)
 source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/b2db138ab8164c237129308ea643de78cd54b252/cherulean.R')
 
+# load files generated from previous analyses 
+# COMMENT OUT BEFORE SOURCING
+
+data_maxn <- read.csv('../data/data_MaxN.csv', header = T)
+data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
+output_poisson <- read.csv('../outputs/REST_final.csv', header = T)
+
 ###############################################
-# PCOA COMPARISON -----------------------------------------------------------------
-# data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
+# PCOA COMPOSITION COMPARISON -----------------------------------------------------------------
+
 # prep REST to match the assemblage survey data like RUV or MaxN
 set.seed(24)
 
@@ -34,7 +41,8 @@ data_rest <- data_ruv %>% distinct(site_ID, Taxon, Size_class, spsize) %>%
 # cross-method comparison doesn't have to deal with size classes
 # construct the community matrix
 nmatrix <- data_uvc %>% filter(str_detect(site_ID, 'hinalea|kaku|sunset')) %>% 
-  group_by(site_ID, Taxon) %>% summarise(n = sum(count)) %>% mutate(method = 'uvc') %>% ungroup # filter and aggregate UVC
+  group_by(site_ID, Taxon) %>% 
+  summarise(n = sum(count)) %>% mutate(method = 'uvc') %>% ungroup # filter and aggregate UVC
 nmatrix <- data_rest %>% group_by(site_ID, Taxon) %>% 
   summarise(n = sum(D, na.rm = T)) %>% mutate(method = 'rest') %>% ungroup %>% filter(!is.na(n), !n == 0) %>% 
   bind_rows(nmatrix, .)
@@ -266,9 +274,7 @@ temp %>% ungroup() %>% filter(UVC > 0 & MaxN > 0) %>%
  pull(Taxon) %>% n_distinct # overlap total video-uvc
 
 temp %>% filter(MaxN > 0, REST == 0, UVC > 0) %>% View # maxN + UVC
-temp %>% filter(MaxN > 0, REST > 0, UVC > 0) %>% 
-  ungroup(Taxon) %>% summarise(overlaps = n()) # all
-
+temp %>% ungroup() %>% filter(MaxN > 0, REST > 0, UVC > 0) %>% nrow # all methods overlap
 
 rm(temp)
 # Species richness per method
@@ -364,3 +370,106 @@ ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Tax
   labs(x = 'Abundances', y = "Species frequency") + looks +
   scale_color_cherulean(palette = "gomphosus", discrete = T, name = 'Method') +
   facet_wrap(vars(site_ID))
+
+###############################################
+# CALCULATE ASSEMBLAGE METRICS -----------------------------------------------------------------
+
+###############################################
+## ASSEMBLAGE STANDING BIOMASS -----------------------------------------------------------
+require(rfishbase) # load fishbase
+
+# extract length weight and length length data
+# dt_LW <- length_weight(species_list = sort(unique(dt_all_long$Taxon)))
+# dt_LW <- dt_LW %>% select(Species, Type, a, b, Number, Locality)
+# write.csv(dt_LW, '../data/data_LW.csv', row.names = F) # select the ones to use manually
+
+dt_LW <- read.csv('../data/data_LWab.csv', header = T)[1:4]
+
+# match length conversions
+dt_LL <- length_length(species_list = sort(unique(dt_LW$Species[dt_LW$Type != 'TL'])))
+n_distinct(dt_LW$Species[dt_LW$Type != 'TL']) # how many species, 15
+# only species that need conversions
+dt_LL <- dt_LL %>% select(Species, Length1, Length2, a, b) %>%
+  filter(Length2 == 'TL' | Length1 == 'TL')  # TL in length1 could be solved by algebra to inverse
+colnames(dt_LL)[4:5] <- c('LLa', 'LLb')
+
+dt_LL$inverse <- 0
+dt_LL$inverse[dt_LL$Length1 == 'TL'] <- 1
+
+# need to pick out the LL records that fit what I need
+dt_LL$Type <- dt_LL$Length1
+dt_LL$Type[dt_LL$inverse == 1] <- dt_LL$Length2[dt_LL$inverse == 1]
+# make a column that just represents what is being converted from
+dt_LL <- dt_LL[-c(2:3)]
+dt_LL <- dt_LL %>% arrange(Species, inverse, Type, LLb) %>% 
+  filter(LLb != 1) # anything that is exactly 1 is likely wrong
+
+dt_LL <- dt_LL %>% group_by(Species, inverse, Type) %>% 
+  summarise(LLa = mean(LLa), LLb = mean(LLb)) # take the mean if there are multiple
+
+dt_LW <- left_join(dt_LW, dt_LL %>% filter(inverse == 0), by=c("Species", "Type"))
+temp_LW <- left_join(dt_LW, dt_LL %>% filter(inverse == 1), by=c("Species", "Type")) %>% 
+  filter(is.na(inverse.x), is.na(inverse.y) == F)
+
+# manual join offline
+# write.csv(dt_LW, '../data/data_LW_LL.csv', row.names = F)
+# clipr::write_clip(temp_LW)
+rm(temp_LW)
+dt_LW <- read.csv('../data/data_LW_LL.csv', header = T)
+
+# calculate biomass for each species-size
+data_biomass <- dt_all_long
+data_biomass$midSize <- str_extract(data_biomass$Size_class, '(?<=\\-|(\\<\\s))[:digit:]+$') %>% 
+  as.numeric
+data_biomass$midSize[data_biomass$midSize > 5] <- data_biomass$midSize[data_biomass$midSize > 5] -4
+data_biomass$midSize[data_biomass$midSize == 5] <- data_biomass$midSize[data_biomass$midSize == 5] - 2.5
+
+data_biomass <- left_join(data_biomass, dt_LW[1:7], by=c("Taxon" = "Species"))
+data_biomass <- data_biomass %>% filter(!is.na(Type)) # remove uncertain records that can't be matched
+# W = a * L^b
+# length conversion first, midSize TL -> right length type -> biomass
+# dt_LW inverse = 1 means TL = L1
+# inverse = 1: L2 = a + b*L1
+# inverse = 0:  = (L2 - a) / b 
+data_biomass$L <- data_biomass$midSize
+data_biomass$L[data_biomass$Type != 'TL' & data_biomass$inverse == 0] <- with(data_biomass[data_biomass$Type != 'TL' & data_biomass$inverse == 0, ], (midSize - LLa) / LLb)
+data_biomass$L[data_biomass$Type != 'TL' & data_biomass$inverse == 1] <- with(data_biomass[data_biomass$Type != 'TL' & data_biomass$inverse == 1, ], LLa + LLb * midSize)
+data_biomass$biomass <- 0
+data_biomass$biomass <- with(data_biomass, (a * L ^ b) * n) # length -> weight * number of individuals
+dt_metrics <- data_biomass %>% filter(n > 0) %>% 
+  group_by(site_ID, method) %>% summarise(SSB = sum(biomass), S = n_distinct(Taxon))
+
+detach('package:rfishbase')
+rm(dt_LL, dt_LW)
+
+# dt_traits <- read.csv('../data/traits_manual.csv', header = T) %>% select(Species, Schooling, RemarksRefs) %>% 
+#   right_join(., dt_LW, by="Species") %>% arrange(Species)
+
+###############################################
+## Richness and evenness measures -----------------------------------------------------------
+
+require(SpadeR)
+
+dt_S <- dt_all_long %>% select(!c(Size_class, n)) %>% group_by_at(vars(-reln)) %>% 
+  summarise(reln = sum(reln)) %>% 
+  mutate(names = paste(site_ID, method, sep="_")) %>% ungroup %>%  # aggregate size classes
+  select(!c(site_ID, method)) %>% 
+  tidyr::pivot_wider(names_from = names, values_from = reln)
+dt_S[is.na(dt_S)] <- 0
+dt_S[-1] <- round(dt_S[-1] * 500, 0) # turn proportional abundance into "counts"
+
+expS <- as.list(rep(NA, ncol(dt_S) - 1)) # empty list to populate with results
+for (i in 2:ncol(dt_S)) {
+  expS[[i-1]] <- ChaoSpecies(dt_S[i][dt_S[i] > 0], datatype = "abundance", k=10, conf=0.95)
+} # calculate expected species richness for each site-method without zeroes
+
+dt_metrics$expS <- sapply(expS, function(x) x$Species_table[5])
+# extract the iChao-bc metric, which accounts for detection differences and bias correction
+# this only works if the site ID and method order matches exactly with dt_metrics!
+
+require(iNEXT)
+hill <- as.list(rep(NA, ncol(dt_S) - 1)) # empty list to populate with results
+for (i in 2:ncol(dt_S)) {
+  hill[[i-1]] <- iNEXT(dt_S[i][dt_S[i] > 0], datatype = "abundance", q = c(1,2))
+} # calculate expected species richness for each site-method without zeroes
+sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD))

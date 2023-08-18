@@ -285,7 +285,7 @@ Try fitting proper nonlinear regression models for the saturation curves
 
 ``` {r SAC modelling for sites}
 
-require(nlstools)
+installrequire(nlstools)
 SAC_curve <- as.list(rep(0,2)) # info to fill with asymptotic non linear models
 SAC_pred <- as.list(rep(0,2)) # object to fill with confidence interval info
 set.seed(24)
