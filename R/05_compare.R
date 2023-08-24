@@ -441,12 +441,13 @@ dt_metrics <- data_biomass %>% filter(n > 0) %>%
 
 detach('package:rfishbase')
 rm(dt_LL, dt_LW)
+dt_metrics$SSB <- dt_metrics$SSB / 1000 # in kilograms
 
 # dt_traits <- read.csv('../data/traits_manual.csv', header = T) %>% select(Species, Schooling, RemarksRefs) %>% 
 #   right_join(., dt_LW, by="Species") %>% arrange(Species)
 
 ###############################################
-## Richness and evenness measures -----------------------------------------------------------
+## Richness measures -----------------------------------------------------------
 
 require(SpadeR)
 
@@ -468,8 +469,47 @@ dt_metrics$expS <- sapply(expS, function(x) x$Species_table[5])
 # this only works if the site ID and method order matches exactly with dt_metrics!
 
 require(iNEXT)
+# Calculate Hill numbers, effective number of species instead of an evenness index
 hill <- as.list(rep(NA, ncol(dt_S) - 1)) # empty list to populate with results
 for (i in 2:ncol(dt_S)) {
   hill[[i-1]] <- iNEXT(dt_S[i][dt_S[i] > 0], datatype = "abundance", q = c(1,2))
 } # calculate expected species richness for each site-method without zeroes
-sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD))
+# q0 = species richness
+# q1 = exponential Shannon entropy, rare species have greater influence
+# q2 = inverse Simpson index, dominant species have greater influence
+dt_metrics$q1 <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD))
+dt_metrics$q2 <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 2) %>% pull(qD))
+
+###############################################
+## PCoA on metrics -----------------------------------------------------------
+
+set.seed(24)
+metrics_dis <- vegdist(dt_metrics[-(1:2)], method = "euclidean", diag = F, binary = F)
+metrics_pcoa <- ape::pcoa(metrics_dis, correction = "none")
+
+ggplot(data=metrics_pcoa$values[1:5,], aes(x=1:5, y=Relative_eig/sum(metrics_pcoa$values$Relative_eig))) +
+  geom_line() + geom_point(shape=21, fill='white', size=3) + labs(x=NULL, y=NULL) +
+  scale_x_continuous(breaks=c(1:10)) +
+  theme_bw(base_size = 13) + labs(title = "Scree plot (PCoA)")
+
+biplot(metrics_pcoa, rn = NULL)
+metrics_env <- envfit(metrics_pcoa$vectors, env = dt_metrics[-(1:2)], perm = 999)
+plot(metrics_env)
+
+dt_metricspcoa <- as.data.frame(metrics_pcoa$vectors) %>% bind_cols(., dt_metrics[1:2])
+metrics_vec <- 75 * scores(metrics_env, "vectors") %>% as.data.frame
+metrics_vec$metrics <- rownames(metrics_vec)
+
+ggplot(data = dt_metricspcoa) +
+  geom_segment(data = metrics_vec, aes(x = 0, y = 0, xend = Axis.1, yend = Axis.2), 
+               arrow = arrow(length = unit(1.5, "mm"), type = "closed"), color = 'grey') +
+  geom_text(data = metrics_vec, aes(x = Axis.1 + 5, y = Axis.2 + 5, label = metrics),
+                           size = 4, color = 'grey50') +
+  geom_polygon(aes(x = Axis.1, y = Axis.2, color = site_ID), fill = 'transparent', alpha = 0.2) +
+  geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
+  looks + labs(x = "PCo1", y = "PCo2")+
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+  scale_color_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+  scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method") +
+  coord_fixed()
+
