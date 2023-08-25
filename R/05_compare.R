@@ -21,7 +21,6 @@ data_maxn <- read.csv('../data/data_MaxN.csv', header = T)
 data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
 output_poisson <- read.csv('../outputs/REST_final.csv', header = T)
 
-###############################################
 # PCOA COMPOSITION COMPARISON -----------------------------------------------------------------
 
 # prep REST to match the assemblage survey data like RUV or MaxN
@@ -115,7 +114,7 @@ f_relpcoa2 <- ggplot(data = relpcoadt) +
 
 ((f_pcoa1/f_pcoa2) | (f_relpcoa1/f_relpcoa2)) + plot_layout(guides = "collect")
 
-###############################################
+
 # COMPARE ASSEMBLAGES BETWEEN CAMERAS ---------------------------------------
 # compare the assemblage composition with PCoA between MaxN cameras
 
@@ -170,7 +169,6 @@ f_maxncam[[2]] <- ggplot(data = dt_maxnpcoa) +
 
 (f_maxncam[[1]]|f_maxncam[[2]]) + plot_layout(guides = "collect")
 
-###############################################
 # PAIRWISE ABUNDANCE COMPARISONS --------------------------------------------
 # look at scatterplots first and then maybe fit OLS/GLMs
 
@@ -197,7 +195,6 @@ dt_allmethods$Size_class <- str_replace_all(dt_allmethods$Size_class, pretty) %>
 # long format
 dt_all_long <- dt_allmethods %>% 
   tidyr::pivot_longer(., cols = UVC:REST, names_to = "method", values_to = "n")
-
 
 # REST - MaxN
 f_pairscatter <- as.list(rep(NA, 3))
@@ -288,69 +285,137 @@ temp %>% filter(REST == 0, MaxN > 0) %>% summarise(missedsp = n_distinct(Taxon))
 set.seed(240)
 # initially started out thinking about fitting Size_class as an effect, 
 # but the size spectra makes me think that letting size absorb variation is not the way to go
+# dominated by 10-19 cm
 
-model_methodpairs <- as.list(rep('', 3))
+# read in traits to add in
+traits <- read.csv('../data/traits_group.csv', header = T)
+dt_abund <- left_join(dt_allmethods, traits, by = "Taxon")
+
+
+model_methodpairs <- as.list(rep('', 6))
 # MaxN ~ REST
-model_methodpairs[[1]] <- lm(log(MaxN + 1) ~ log(REST + 1), data = dt_allmethods)
+model_methodpairs[[1]] <- lm(log(MaxN + 1) ~ log(REST + 1), data = dt_abund)
 # UVC ~ REST
-model_methodpairs[[2]] <- lm(log(UVC + 1) ~ log(REST + 1), data = dt_allmethods)
+model_methodpairs[[2]] <- lm(log(UVC + 1) ~ log(REST + 1), data = dt_abund)
 # MaxN ~ UVC
-model_methodpairs[[3]] <- lm(log(MaxN + 1) ~ log(UVC + 1), data = dt_allmethods)
+model_methodpairs[[3]] <- lm(log(MaxN + 1) ~ log(UVC + 1), data = dt_abund)
 
-summary(model_methodpairs[[1]])
-summary(model_methodpairs[[2]])
-summary(model_methodpairs[[3]])
+# candidates with sociality
+model_methodpairs[[4]] <- lm(log(MaxN + 1) ~ log(REST + 1) + Group, data = dt_abund)
+# UVC ~ REST
+model_methodpairs[[5]] <- lm(log(UVC + 1) ~ log(REST + 1) + Group, data = dt_abund)
+# MaxN ~ UVC
+model_methodpairs[[6]] <- lm(log(MaxN + 1) ~ log(UVC + 1) + Group, data = dt_abund)
+
+summary(model_methodpairs[[4]])
+summary(model_methodpairs[[5]])
+summary(model_methodpairs[[6]])
+
+sapply(model_methodpairs, AIC)[c(1,4,2,5,3,6)] # look at AICs
+# sociality is consistently lower
 
 # model prediction
-# make a standard new x that will be used by all models, including size_class predictor data
-newx = data.frame(REST = seq(0, max(dt_allmethods$REST), length.out = 40),
-                  MaxN = seq(0, max(dt_allmethods$MaxN), length.out = 40),
-                  UVC = seq(0, max(dt_allmethods$UVC), length.out = 40))
+# make a standard new x that will be used by all models, with sociality held at a mean
+social <- mean(dt_abund$Group)
+newx <- data.frame(REST = seq(min(dt_abund$REST), max(dt_abund$REST), length.out = 50), 
+                   UVC = seq(min(dt_abund$UVC), max(dt_abund$UVC), length.out = 50), 
+                   Group = social)
 predicts <- as.list(rep('', 3))
 for (i in 1:3) { # each model
-    predicts[[i]] <- predict(model_methodpairs[[i]], newdata = newx, se.fit = T)
+    predicts[[i]] <- predict(model_methodpairs[[i+3]], newdata = newx, se.fit = T)
     predicts[[i]] <- with(predicts[[i]], data.frame(fitted = fit, lwr = fit - 1.96 * se.fit, 
                                                     upr = fit + 1.96 * se.fit))
 }
-predicts[[1]]$x = newx$REST
-predicts[[2]]$x = newx$REST
-predicts[[3]]$x = newx$UVC
+# add newx to the prediction data frame
+predicts[[1]] <- predicts[[1]] %>% bind_cols(newx %>% select(Group))
+predicts[[2]] <- predicts[[2]] %>% bind_cols(newx %>% select(REST, Group))
+predicts[[3]] <- predicts[[3]] %>% bind_cols(newx %>% select(UVC, Group))
 
-f_modelpairs <- as.list(rep('', 3))
-# REST - MaxN
-f_modelpairs[[1]] <- ggplot(dt_allmethods) +
+# partial regression plots for observed abundances (no sociality yet)
+f_abundpair <- as.list(rep('', 3))
+f_abundpair[[1]] <- ggplot(dt_abund) +
   geom_jitter(aes(y = log(MaxN + 1), x = log(REST + 1), fill = Size_class), width = 0.05, height = 0.05, 
                alpha = 0.6, size = 2, shape = 21) +
   geom_ribbon(data = predicts[[1]], 
-              aes(x = log(x + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
-  geom_line(data = predicts[[1]], aes(x = log(x + 1), y = fitted)) +
+              aes(x = log(REST + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
+  geom_line(data = predicts[[1]], aes(x = log(REST + 1), y = fitted)) +
   labs(x = 'log(REST)', y = 'log(MaxN)') +
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 # REST - UVC
-f_modelpairs[[2]] <- ggplot(dt_allmethods) +
+f_abundpair[[2]] <- ggplot(dt_allmethods) +
   geom_jitter(aes(y = log(UVC + 1), x = log(REST + 1), fill = Size_class), width = 0.05, height = 0.05, 
              alpha = 0.6, size = 2, shape =21) +
-  geom_ribbon(data = predicts[[2]], aes(x = log(x + 1), ymin = lwr, ymax = upr), 
+  geom_ribbon(data = predicts[[2]], aes(x = log(REST + 1), ymin = lwr, ymax = upr), 
               linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
-  geom_line(data = predicts[[2]], aes(x = log(x + 1), y = fitted)) +
+  geom_line(data = predicts[[2]], aes(x = log(REST + 1), y = fitted)) +
   labs(x = 'log(REST)', y = 'log(Point count)')+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 # UVC - MaxN
-f_modelpairs[[3]] <- ggplot(dt_allmethods) +
+f_abundpair[[3]] <- ggplot(dt_allmethods) +
   geom_jitter(aes(y = log(MaxN + 1), x = log(UVC + 1), fill = Size_class), width = 0.05, height = 0.05, 
                alpha = 0.6, size = 2, shape = 21) +
   geom_ribbon(data = predicts[[3]], 
-              aes(x = log(x + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
-  geom_line(data = predicts[[3]], aes(x = log(x + 1), y = fitted)) +
+              aes(x = log(UVC + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
+  geom_line(data = predicts[[3]], aes(x = log(UVC + 1), y = fitted)) +
   labs(x = 'log(Point count)', y = 'log(MaxN)')+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
-(f_modelpairs[[1]] + f_modelpairs[[2]] + f_modelpairs[[3]]) * looks + plot_layout(guides = "collect")
+(f_abundpair[[1]] + f_abundpair[[2]] + f_abundpair[[3]]) * looks * coord_cartesian(xlim = c(0,4.75), ylim = c(0,4.75)) + plot_layout(guides = "collect")
 
+# partial regression plots for partial sociality effects
+# generate partial predictions for sociality, held at abundance mean
+meanREST <- mean(dt_abund$REST)
+meanPoint <- mean(dt_abund$UVC)
+newx <- data.frame(Group = 1:5, REST = meanREST, UVC = meanPoint)
+for (i in 4:6) { # each model
+  predicts[[i]] <- predict(model_methodpairs[[i]], newdata = newx, se.fit = T)
+  predicts[[i]] <- with(predicts[[i]], data.frame(fitted = fit, lwr = fit - 1.96 * se.fit, 
+                                                  upr = fit + 1.96 * se.fit,
+                                                  Group = newx$Group))
+}
 
-###############################################
+f_abundsoc <- as.list(rep('', 3))
+
+f_abundsoc[[1]] <- ggplot(dt_abund) +
+  ggdist::stat_slab(aes(x = Group, y = log(MaxN + 1)), 
+                       adjust = .5, justification = -.5, 
+                       color = 'grey20', fill = 'grey70', size = 0.5, alpha = 0.4) + 
+  geom_point(aes(x = Group, y = log(MaxN + 1)), size = 1, alpha = .4, shape = 21, color = 'grey30', 
+             fill = 'white', position = position_jitter(width = .1)) +
+  geom_errorbar(data = predicts[[4]], aes(x = Group + 0.25, ymin = lwr, ymax = upr), 
+                  color = 'grey20', width = 0.2) +
+  geom_point(data = predicts[[4]], aes(x = Group + 0.25, y = fitted), 
+                  color = 'grey20', size = 2.5) +
+  labs(x = 'Sociality', y = 'log(MaxN)')
+
+f_abundsoc[[2]] <- ggplot(dt_abund) +
+  ggdist::stat_slab(aes(x = Group, y = log(UVC + 1)), 
+                    adjust = .5, justification = -.5, 
+                    color = 'grey20', fill = 'grey70', size = 0.5, alpha = 0.4) + 
+  geom_point(aes(x = Group, y = log(UVC + 1)), size = 1, alpha = .4, shape = 21, color = 'grey20', 
+             fill = 'white', position = position_jitter(width = .1)) +
+  geom_errorbar(data = predicts[[5]], aes(x = Group + 0.25, ymin = lwr, ymax = upr), 
+                 color = 'grey20', width = 0.2) +
+  geom_point(data = predicts[[5]], aes(x = Group + 0.25, y = fitted), 
+             color = 'grey20', size = 2.5) +
+  labs(x = 'Sociality', y = 'log(Point count)')
+
+f_abundsoc[[3]] <- ggplot(dt_abund) +
+  ggdist::stat_slab(aes(x = Group, y = log(MaxN + 1)), 
+                    adjust = .5, justification = -.5, 
+                    color = 'grey20', fill = 'grey70', size = 0.5, alpha = 0.4) + 
+  geom_point(aes(x = Group, y = log(MaxN + 1)), size = 1, alpha = .4, shape = 21, color = 'grey20', 
+             fill = 'white', position = position_jitter(width = .1)) +
+  geom_errorbar(data = predicts[[6]], aes(x = Group + 0.25, ymin = lwr, ymax = upr), 
+                color = 'grey20', width = 0.2) +
+  geom_point(data = predicts[[6]], aes(x = Group + 0.25, y = fitted), 
+             color = 'grey20', size = 2.5) +
+  labs(x = 'Sociality', y = 'log(MaxN)')
+
+(f_abundsoc[[1]] + f_abundsoc[[2]] + f_abundsoc[[3]]) * looks * scale_x_continuous(breaks = c(1:5)) * coord_cartesian(xlim = c(0.5,5.7), ylim = c(0,4.75), clip = 'off') + plot_layout(guides = "collect")
+
 ## SACs --------------------------------------------
 # do it on size aggregated data
 temp <- dt_all_long %>% group_by(site_ID, method) %>% summarise(totaln = sum(n))
@@ -371,10 +436,8 @@ ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Tax
   scale_color_cherulean(palette = "gomphosus", discrete = T, name = 'Method') +
   facet_wrap(vars(site_ID))
 
-###############################################
 # CALCULATE ASSEMBLAGE METRICS -----------------------------------------------------------------
 
-###############################################
 ## ASSEMBLAGE STANDING BIOMASS -----------------------------------------------------------
 require(rfishbase) # load fishbase
 
