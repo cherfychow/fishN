@@ -242,7 +242,6 @@ pairs(dt_allmethods[,4:6], log = 'xy', pch = 1:7, cex = 1.2)
 # hinalea
 pairs(dt_allmethods[dt_allmethods$site_ID == 'hale_hinalea', 4:6], log = 'xy', pch = 1:7, cex = 1.2)
 
-###############################################
 ## TALLIES --------------------------------------------
 # exclusive species check
 
@@ -279,7 +278,7 @@ dt_all_long %>% group_by(site_ID, method) %>% filter(n > 0) %>% summarise(S = le
 temp <- dt_allmethods %>% group_by(site_ID, Taxon) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))
 temp %>% filter(REST == 0, MaxN > 0) %>% summarise(missedsp = n_distinct(Taxon))
 
-###############################################
+
 ## Fit GLMs --------------------------------------------
 
 set.seed(240)
@@ -509,7 +508,7 @@ dt_metrics$SSB <- dt_metrics$SSB / 1000 # in kilograms
 # dt_traits <- read.csv('../data/traits_manual.csv', header = T) %>% select(Species, Schooling, RemarksRefs) %>% 
 #   right_join(., dt_LW, by="Species") %>% arrange(Species)
 
-###############################################
+
 ## Richness measures -----------------------------------------------------------
 
 require(SpadeR)
@@ -543,7 +542,7 @@ for (i in 2:ncol(dt_S)) {
 dt_metrics$q1 <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD))
 dt_metrics$q2 <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 2) %>% pull(qD))
 
-###############################################
+
 ## PCoA on metrics -----------------------------------------------------------
 
 set.seed(24)
@@ -563,7 +562,7 @@ dt_metricspcoa <- as.data.frame(metrics_pcoa$vectors) %>% bind_cols(., dt_metric
 metrics_vec <- 75 * scores(metrics_env, "vectors") %>% as.data.frame
 metrics_vec$metrics <- rownames(metrics_vec)
 
-ggplot(data = dt_metricspcoa) +
+f_metricpcoa <- ggplot(data = dt_metricspcoa) +
   geom_segment(data = metrics_vec, aes(x = 0, y = 0, xend = Axis.1, yend = Axis.2), 
                arrow = arrow(length = unit(1.5, "mm"), type = "closed"), color = 'grey') +
   geom_text(data = metrics_vec, aes(x = Axis.1 + 5, y = Axis.2 + 5, label = metrics),
@@ -576,3 +575,67 @@ ggplot(data = dt_metricspcoa) +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method") +
   coord_fixed()
 
+f_metricpcoa
+
+# RAREFACTION CURVE -----------------------------------------------------------
+# Model species accumulation curves
+
+temp <- dt_all_long %>% group_by(site_ID, Taxon, method) %>% 
+  summarise(n = sum(n), reln=sum(reln)) %>% ungroup %>% group_split(site_ID, method)
+# temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = round(sum(n), 0)) # use for sample size, as in total number of individuals
+temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = length(unique(Taxon))) # use for sample size, as in total number of individuals
+
+# hard to use timestamps for point count species accumulation, so we'll do it by abundance-weighted sampling
+dt_SAC <- as.list(rep('', 9))
+for(i in 1:9) {
+  dt_SAC[[i]] <- data.frame(site_ID = temp[[i]]$site_ID[1], method = temp[[i]]$method[1],
+                            sample = 1:50, nsp = NA) # empty dataframe
+  tempsp <- data.frame(sample = NA, sp = NA) # dummy to append species accumulation to
+  for (j in 1:50) {
+    tempsp <- rbind(tempsp,
+      data.frame(sample = j, sp = sample(temp[[i]]$Taxon, size = j, replace = T, prob = temp[[i]]$reln)))
+    # sample the assemblage using relative abundances as probability
+    # temporarily store sampled species
+    dt_SAC[[i]][j,4] <- tempsp %>% filter(sample <= j) %>% pull(sp) %>% n_distinct(.) 
+    # calculate species accumulative
+  } 
+}
+
+# ggplot(data = bind_rows(dt_SAC)) +
+#   geom_line(aes(x = sample, y = nsp, group = interaction(site_ID, method), 
+#                 color = site_ID), size = 1) + looks
+
+# now we'll fit accumulation models
+fit_SAC <- as.list(rep(NA, 9))
+SAC_pred <- as.list(rep(NA, 9))
+set.seed(240)
+for (i in 1:9) {
+  optout <- tryCatch(nls(formula = nsp ~ k + s * log(sample), 
+                         data = na.omit(dt_SAC[[i]]), 
+                         start = list(k = 0.1, s = 0.1)),
+                     error = function(e) e)
+  if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
+  fit_SAC[[i]] <- optout
+}
+require(nlstools)
+for (i in 1:9) {
+  SAC_pred[[i]] <- nlsBootPredict(
+    nlsBoot(fit_SAC[[i]], niter=500), 
+    newdata = dt_SAC[[i]][3], interval = "confidence") %>% as.data.frame
+  colnames(SAC_pred[[i]])[2:3] <- c('lwr', 'upr')
+  SAC_pred[[i]] <- data.frame(site_ID = temp[[i]]$site_ID[1], method = temp[[i]]$method[1], 
+                              sample = dt_SAC[[i]][3]) %>% bind_cols(., SAC_pred[[i]])
+}
+
+ggplot() +
+  geom_point(data = bind_rows(dt_SAC), aes(x = sample, y = nsp, group = interaction(site_ID, method),
+                                           color = method), alpha = 0.5) +
+  geom_ribbon(data = bind_rows(SAC_pred), aes(x = sample, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
+                                            fill = method), alpha = 0.4) +
+  geom_line(data = bind_rows(SAC_pred), aes(x = sample, y = Median, group = interaction(site_ID, method),
+                                            color = method)) +
+  scale_color_cherulean(palette = "gomphosus", discrete = T, name = "Method") +
+  scale_fill_cherulean(palette = "gomphosus", discrete = T, name = "Method") +
+  facet_wrap(vars(site_ID)) + looks + labs(x = "Number of samples", y = "Number of species")
+
+  
