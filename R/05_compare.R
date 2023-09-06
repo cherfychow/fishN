@@ -567,7 +567,7 @@ f_metricpcoa <- ggplot(data = dt_metricspcoa) +
                arrow = arrow(length = unit(1.5, "mm"), type = "closed"), color = 'grey') +
   geom_text(data = metrics_vec, aes(x = Axis.1 + 5, y = Axis.2 + 5, label = metrics),
                            size = 4, color = 'grey50') +
-  geom_polygon(aes(x = Axis.1, y = Axis.2, color = site_ID), fill = 'transparent', alpha = 0.2) +
+  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo1", y = "PCo2")+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
@@ -577,33 +577,35 @@ f_metricpcoa <- ggplot(data = dt_metricspcoa) +
 
 f_metricpcoa
 
-# RAREFACTION CURVE -----------------------------------------------------------
+# ACCUMULATION/RAREFACTION CURVE -----------------------------------------------------------
 # Model species accumulation curves
 
 temp <- dt_all_long %>% group_by(site_ID, Taxon, method) %>% 
-  summarise(n = sum(n), reln=sum(reln)) %>% ungroup %>% group_split(site_ID, method)
-# temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = round(sum(n), 0)) # use for sample size, as in total number of individuals
-temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = length(unique(Taxon))) # use for sample size, as in total number of individuals
+  summarise(n = sum(n), reln=sum(reln)) %>% ungroup %>% filter(n > 0) %>% group_split(site_ID, method)
+temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = sum(round(n, 0))) # use for sample size, as in total number of individuals
+# temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = length(unique(Taxon))) # use for sample size, as in total number of individuals
 
 # hard to use timestamps for point count species accumulation, so we'll do it by abundance-weighted sampling
 dt_SAC <- as.list(rep('', 9))
 for(i in 1:9) {
   dt_SAC[[i]] <- data.frame(site_ID = temp[[i]]$site_ID[1], method = temp[[i]]$method[1],
-                            sample = 1:50, nsp = NA) # empty dataframe
+                            sample = 1:temp2$total[i], nsp = NA) # empty dataframe
   tempsp <- data.frame(sample = NA, sp = NA) # dummy to append species accumulation to
-  for (j in 1:50) {
+  temp3 <- temp[[i]]$Taxon[rep(1:nrow(temp[[i]]), ceiling(temp[[i]]$n))]
+  for (j in 1:temp2$total[i]) {
     tempsp <- rbind(tempsp,
-      data.frame(sample = j, sp = sample(temp[[i]]$Taxon, size = j, replace = T, prob = temp[[i]]$reln)))
+      data.frame(sample = j, sp = sample(temp3, size = j, replace = F)))
     # sample the assemblage using relative abundances as probability
     # temporarily store sampled species
     dt_SAC[[i]][j,4] <- tempsp %>% filter(sample <= j) %>% pull(sp) %>% n_distinct(.) 
     # calculate species accumulative
   } 
+  tempsp <- tempsp %>% filter(!is.na(sp)) # get rid of NAs
 }
 
-# ggplot(data = bind_rows(dt_SAC)) +
-#   geom_line(aes(x = sample, y = nsp, group = interaction(site_ID, method), 
-#                 color = site_ID), size = 1) + looks
+ggplot(data = bind_rows(dt_SAC)) +
+  geom_line(aes(x = sample, y = nsp, group = interaction(site_ID, method),
+                color = site_ID), size = 1) + looks + scale_x_log10()
 
 # now we'll fit accumulation models
 fit_SAC <- as.list(rep(NA, 9))
