@@ -415,7 +415,7 @@ f_abundsoc[[3]] <- ggplot(dt_abund) +
 
 (f_abundsoc[[1]] + f_abundsoc[[2]] + f_abundsoc[[3]]) * looks * scale_x_continuous(breaks = c(1:5)) * coord_cartesian(xlim = c(0.5,5.7), ylim = c(0,4.75), clip = 'off') + plot_layout(guides = "collect")
 
-## SACs --------------------------------------------
+# SADs --------------------------------------------
 # do it on size aggregated data
 temp <- dt_all_long %>% group_by(site_ID, method) %>% summarise(totaln = sum(n))
 # add relative abundances
@@ -526,7 +526,9 @@ for (i in 2:ncol(dt_S)) {
   expS[[i-1]] <- ChaoSpecies(dt_S[i][dt_S[i] > 0], datatype = "abundance", k=10, conf=0.95)
 } # calculate expected species richness for each site-method without zeroes
 
-dt_metrics$expS <- sapply(expS, function(x) x$Species_table[5])
+dt_metrics$expS <- sapply(expS, function(x) x$Species_table[4])
+dt_metrics$expSlwr <- sapply(expS, function(x) x$Species_table[4,3])
+dt_metrics$expSupr <- sapply(expS, function(x) x$Species_table[4,4])
 # extract the iChao-bc metric, which accounts for detection differences and bias correction
 # this only works if the site ID and method order matches exactly with dt_metrics!
 
@@ -541,7 +543,28 @@ for (i in 2:ncol(dt_S)) {
 # q2 = inverse Simpson index, dominant species have greater influence
 dt_metrics$q1 <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD))
 dt_metrics$q2 <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 2) %>% pull(qD))
+dt_metrics$q1lwr <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD.LCL))
+dt_metrics$q1upr <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 1) %>% pull(qD.UCL))
+dt_metrics$q2lwr <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 2) %>% pull(qD.LCL))
+dt_metrics$q2upr <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m == max(m), Order.q == 2) %>% pull(qD.UCL))
 
+dt_metrics <- dt_metrics[c(1:5,8,9)] %>% tidyr::pivot_longer(cols = -(1:2), names_to = "metrics", values_to = "value") %>% 
+  left_join(., dt_metrics[c(1,2,6,7,10:13)] %>% tidyr::pivot_longer(cols = -(1:2), names_pattern = "^(.*)(lwr|upr)$", names_to = c("metrics", ".value")), by = c("site_ID", "method", "metrics"))
+
+f_metrics <- as.list(rep('', 5))
+for (i in 1:n_distinct(dt_metrics$metrics)) {
+  f_metrics[[i]] <- ggplot(dt_metrics %>% filter(metrics == dt_metrics$metrics[i])) +
+  geom_pointrange(aes(x = site_ID, y = value, ymin = lwr, ymax = upr, shape = method, fill = method)) +
+  scale_fill_cherulean(palette = 'gomphosus', discrete = T) + looks +
+  scale_shape_manual(values = 21:23) +
+  scale_x_discrete(labels = c("HH", "HK", "SP")) +
+  labs(x = '', y = dt_metrics$metrics[i])
+}
+
+f_metrics[[3]] <- f_metrics[[3]] + scale_y_log10()
+f_metrics[[1]] <- f_metrics[[1]] + labs(y = 'SSB (kg)', x = '')
+
+f_metrics[[1]] + f_metrics[[2]] + f_metrics[[3]] + f_metrics[[4]] + f_metrics[[5]] + plot_layout(guides = "collect")
 
 ## PCoA on metrics -----------------------------------------------------------
 
@@ -631,13 +654,13 @@ for (i in 1:9) {
 
 ggplot() +
   geom_point(data = bind_rows(dt_SAC), aes(x = sample, y = nsp, group = interaction(site_ID, method),
-                                           color = method), alpha = 0.5) +
+                                           color = site_ID), alpha = 0.5) +
   geom_ribbon(data = bind_rows(SAC_pred), aes(x = sample, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
-                                            fill = method), alpha = 0.4) +
+                                            fill = site_ID), alpha = 0.4) +
   geom_line(data = bind_rows(SAC_pred), aes(x = sample, y = Median, group = interaction(site_ID, method),
-                                            color = method)) +
-  scale_color_cherulean(palette = "gomphosus", discrete = T, name = "Method") +
-  scale_fill_cherulean(palette = "gomphosus", discrete = T, name = "Method") +
-  facet_wrap(vars(site_ID)) + looks + labs(x = "Number of samples", y = "Number of species")
+                                            color = site_ID)) +
+  scale_color_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+  facet_wrap(vars(method), scales = 'free_x') + looks + labs(x = "Number of samples", y = "Number of species")
 
   
