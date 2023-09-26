@@ -34,7 +34,7 @@ data_uvc$Size_class[data_uvc$TL_cm > 30 & data_uvc$TL_cm <= 40] <- "30_39"
 data_uvc$Size_class[data_uvc$TL_cm > 40 & data_uvc$TL_cm <= 50] <- "40_49"
 data_uvc$Size_class[data_uvc$TL_cm > 50 & data_uvc$TL_cm <= 60] <- "50_59"
 
-data_rest <- data_ruv %>% distinct(site_ID, Taxon, Size_class, spsize) %>% 
+data_rest <- data_ruv2 %>% distinct(site_ID, Taxon, Size_class, spsize) %>% 
   left_join(., output_poisson[c(1,3,4,12)], by=c("site_ID", "Taxon", "Size_class"))
 
 # cross-method comparison doesn't have to deal with size classes
@@ -620,10 +620,11 @@ for(i in 1:9) {
       data.frame(sample = j, sp = sample(temp3, size = j, replace = F)))
     # sample the assemblage using relative abundances as probability
     # temporarily store sampled species
-    dt_SAC[[i]][j,4] <- tempsp %>% filter(sample <= j) %>% pull(sp) %>% n_distinct(.) 
+    dt_SAC[[i]][j,4] <- tempsp %>% filter(sample <= j, is.na(sp) == F) %>% pull(sp) %>% n_distinct(.) 
     # calculate species accumulative
   } 
-  tempsp <- tempsp %>% filter(!is.na(sp)) # get rid of NAs
+  dt_SAC[[i]]$site_ID <- temp[[i]]$site_ID[1]
+  dt_SAC[[i]]$method <- temp[[i]]$method[1]
 }
 
 ggplot(data = bind_rows(dt_SAC)) +
@@ -634,14 +635,27 @@ ggplot(data = bind_rows(dt_SAC)) +
 fit_SAC <- as.list(rep(NA, 9))
 SAC_pred <- as.list(rep(NA, 9))
 set.seed(240)
-for (i in 1:9) {
-  optout <- tryCatch(nls(formula = nsp ~ k + s * log(sample), 
-                         data = na.omit(dt_SAC[[i]]), 
-                         start = list(k = 0.1, s = 0.1)),
+for (i in 1:9) { # beta P model
+  optout <- tryCatch(nls(data = na.omit(dt_SAC[[i]]),
+                         formula = nsp ~ a - ((a-b)*exp(-c*sample)),
+                         start = list(a = 10, b = 1, c = 0.1)),
                      error = function(e) e)
   if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
   fit_SAC[[i]] <- optout
 }
+
+fit_SAC[[9]] <- nls(data = na.omit(dt_SAC[[9]]),
+    formula = nsp ~ a - ((a-b)*exp(-c*sample)),
+    start = list(a = 20, b = 1, c = 0.1))
+
+# for (i in 1:9) { # power model
+#   optout <- tryCatch(nls(formula = nsp ~ k + s * log(sample), 
+#                          data = na.omit(dt_SAC[[i]]), 
+#                          start = list(k = 0.1, s = 0.1)),
+#                      error = function(e) e)
+#   if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
+#   fit_SAC[[i]] <- optout
+# }
 require(nlstools)
 for (i in 1:9) {
   SAC_pred[[i]] <- nlsBootPredict(
@@ -652,15 +666,162 @@ for (i in 1:9) {
                               sample = dt_SAC[[i]][3]) %>% bind_cols(., SAC_pred[[i]])
 }
 
-ggplot() +
-  geom_point(data = bind_rows(dt_SAC), aes(x = sample, y = nsp, group = interaction(site_ID, method),
-                                           color = site_ID), alpha = 0.5) +
-  geom_ribbon(data = bind_rows(SAC_pred), aes(x = sample, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
-                                            fill = site_ID), alpha = 0.4) +
-  geom_line(data = bind_rows(SAC_pred), aes(x = sample, y = Median, group = interaction(site_ID, method),
-                                            color = site_ID)) +
-  scale_color_cherulean(palette = "cheridis", discrete = T, name = "Site") +
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
-  facet_wrap(vars(method), scales = 'free_x') + looks + labs(x = "Number of samples", y = "Number of species")
+rm(temp, temp2, tempsp)
 
-  
+SAC_rar <- ggplot() +
+  geom_point(data = bind_rows(dt_SAC), aes(x = sample, y = nsp, group = interaction(site_ID, method), color = method), 
+             alpha = 0.2, shape = 21) +
+  geom_ribbon(data = bind_rows(SAC_pred), aes(x = sample, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
+                                            fill = method), alpha = 0.4) +
+  geom_line(data = bind_rows(SAC_pred), aes(x = sample, y = Median, group = interaction(site_ID, method),
+                                            color = method)) +
+  scale_color_cherulean(palette = "gomphosus", discrete = T, name = "Method") +
+  scale_fill_cherulean(palette = "gomphosus", discrete = T, name = "Method") +
+  facet_wrap(vars(site_ID), scales = 'free_x') + looks + scale_x_log10() +
+  labs(x = "Number of samples", y = "Number of species")
+
+## SACs for video methods
+
+## SAC data set up and prep
+data_ruv2 <- read.csv('../data/ruv_himb_pilot.csv', header = T)
+require(lubridate)
+data_ruv2$entrytime_c <- ms(data_ruv2$Time_entry) %>% as.duration
+data_ruv2$exittime_c <- ms(data_ruv2$Time_exit) %>% as.duration
+# calculate staying time duration
+data_ruv2$staytime <- with(data_ruv2, exittime_c - entrytime_c) %>% as.numeric
+summary(data_ruv2)
+data_ruv <- data_ruv %>% filter(staytime > 0) # remove any zero second occurrences
+data_ruv2 <- data_ruv2 %>% arrange(site_ID, Camera, VidFile, entrytime_c)
+#  timestamps are by video but we want them to be timestamps relative to total observation time, not video time.
+cameras <- data_ruv2 %>% distinct(site_ID, Camera, VidFile)
+ncam <- cameras %>% group_by(site_ID, Camera) %>% summarise(ncam = n_distinct(VidFile)) %>% pull(ncam)
+seq <- ''
+  for (i in 1:length(ncam)) {
+    seq <- c(seq, 1:ncam[i])
+  } # generate a sequence vector to identify the nominal order of video files
+seq <- seq[-1] # trim that dummy start
+
+cameras$VidSeq <- seq
+
+data_ruv2 <- left_join(data_ruv2, cameras, by=c('site_ID', 'Camera', 'VidFile'))
+data_ruv2$VidSeq <- as.numeric(data_ruv2$VidSeq)
+
+# make the timestamps relative to site and not video file
+# all videos duration = 11:48 except for deep_0 = 17:42
+for (i in 2:5) {
+  # loop for each video file in order(1-4 or 5) add a multiple of the video file length
+  # 2:5 because the first files don't need fixing
+  # for the 11:48 videos
+  data_ruv2$SACentry[data_ruv2$VidSeq == i & data_ruv2$Camera != 'deep_0'] <- data_ruv2$entrytime_c[data_ruv2$VidSeq == i & data_ruv2$Camera != 'deep_0'] + (i-1)*(dminutes(11) + dseconds(48))
+  # for deep_0 17:42 videos
+  data_ruv2$SACentry[data_ruv2$VidSeq == i & data_ruv2$Camera == 'deep_0'] <- data_ruv2$entrytime_c[data_ruv2$VidSeq == i & data_ruv2$Camera == 'deep_0'] + (i-1)*(dminutes(17) + dseconds(42))
+}
+
+# just put the time stamps in for first video files
+data_ruv2$SACentry[data_ruv2$VidSeq == 1] <- data_ruv2$entrytime_c[data_ruv2$VidSeq == 1]
+data_ruv2$VidSeq <- NULL # get rid of these dummy objects
+rm(cameras, ncam, seq)
+
+## Calculate cumulative species richness over time
+# make a dataframe to populate species accumulation per timestamp
+SAC <- data_ruv2 %>% mutate(site_cam = paste(site_ID, Camera, sep = "_")) %>% 
+  select(site_ID, site_cam, SACentry)  # matches the row index of data_ruv
+
+# make the SAC times relative to the time of first observation
+for (i in 1:11) {
+  time1 <- SAC$SACentry[which(SAC$site_cam == unique(SAC$site_cam)[i])[1]]
+  for (j in which(SAC$site_cam == unique(SAC$site_cam)[i])) {
+    SAC$SACentry[j] <- SAC$SACentry[j] - time1 # take every time stamp and subtract time1 from it
+  }
+}
+rm(time1)
+
+SAC$spN <- NA
+# for every row at every site-camera, calculate the species number accumulation through time
+for (i in 1:11) {
+  rows = seq(which(SAC$site_cam == unique(SAC$site_cam)[i])[1], max(which(SAC$site_cam == unique(SAC$site_cam)[i])), by = 3)
+  for (j in rows) {
+    if (j == rows[1]) { # the first row from each site represents the first species record, so these will always start at 1
+      SAC$spN[j] <- 1
+    }
+    else {
+      SAC$spN[j] <- data_ruv$Taxon[rows[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
+    }
+  }
+}
+SAC <- SAC %>% filter(!is.na(spN))
+SAC$method <- 'MaxN'
+
+# do again, filtering out the species that REST didn't have
+SAC2 <- data_ruv2 %>% mutate(site_cam = paste(site_ID, Camera, sep = "_"), site_sp = paste(site_ID, Taxon, sep = "_")) %>% 
+  filter(site_sp %in% with(data_rest, paste(site_ID, Taxon, sep="_"))) %>% 
+  select(site_ID, site_cam, site_sp, SACentry)  # matches the row index of data_ruv
+
+# make the SAC times relative to the time of first observation
+for (i in 1:11) {
+  time1 <- SAC2$SACentry[which(SAC2$site_cam == unique(SAC2$site_cam)[i])[1]]
+  for (j in which(SAC2$site_cam == unique(SAC2$site_cam)[i])) {
+    SAC2$SACentry[j] <- SAC2$SACentry[j] - time1 # take every time stamp and subtract time1 from it
+  }
+}
+rm(time1)
+
+SAC2$spN <- NA
+# for every row at every site-camera, calculate the species number accumulation through time
+for (i in 1:11) {
+  # don't calculate for every row... every 3rd row
+  rows = seq(which(SAC2$site_cam == unique(SAC2$site_cam)[i])[1], max(which(SAC2$site_cam == unique(SAC2$site_cam)[i])), by = 3)
+  for (j in rows) {
+    if (j == rows[1]) { # the first row from each site represents the first species record, so these will always start at 1
+      SAC2$spN[j] <- 1
+    }
+    else {
+      SAC2$spN[j] <- SAC2$site_sp[rows[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
+    }
+  }
+}
+
+# merge + cleanup
+SAC2$method <- 'REST'
+SAC <- bind_rows(SAC, SAC2)
+rm(SAC2, rows)
+SAC <- SAC %>% filter(!is.na(spN))
+
+fit_SAC2 <- as.list(rep(NA, 6))
+for (i in 1:3) {
+  for (j in 1:2) {
+    fit_SAC2[[i + (j-1)*3]] <- nls(data = SAC %>% 
+                                     filter(site_ID == unique(SAC$site_ID)[i], method == unique(SAC$method)[j]),
+                         formula = spN ~ a - ((a-b)*exp(-c*SACentry)),
+                         start = list(a = 15, b = 1, c = 0.001))
+  }
+}
+
+SAC_pred2 <- as.list(rep(NA, 6))
+newx <- as_tibble(seq(1, 2700, length.out = 200))
+names(newx) <- 'SACentry'
+for (i in 1:3) {
+  for (j in 1:2) {
+    SAC_pred2[[i + (j-1)*3]] <- nlsBootPredict(
+      nlsBoot(fit_SAC2[[i + (j-1)*3]], niter=500), 
+      newdata = newx, interval = "confidence") %>% as.data.frame
+    colnames(SAC_pred2[[i + (j-1)*3]]) <- c('fit', 'lwr', 'upr')
+    SAC_pred2[[i + (j-1)*3]] <- data.frame(site_ID = unique(SAC$site_ID)[i], method = unique(SAC$method)[j],
+                                 SACentry = newx) %>% bind_cols(., SAC_pred2[[i + (j-1)*3]])
+  }
+}
+
+
+SAC_vid <- ggplot() +
+  geom_point(data = SAC, aes(x = SACentry, y = spN, group = site_cam, color = method), 
+             alpha = 0.2, shape = 21) +
+  geom_ribbon(data = bind_rows(SAC_pred2), aes(x = SACentry, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
+                                              fill = method), alpha = 0.4) +
+  geom_line(data = bind_rows(SAC_pred2), aes(x = SACentry, y = fit, group = interaction(site_ID, method),
+                                            color = method)) +
+  scale_color_manual(values = cherulean_palettes[['gomphosus']][c(1,4)], name = 'Method') +
+  scale_fill_manual(values = cherulean_palettes[['gomphosus']][c(1,4)], name = 'Method') + looks +
+  facet_wrap(vars(site_ID)) +
+  labs(x = "Time elapsed (s)", y = "Number of species")
+
+(SAC_rar / SAC_vid) * theme(legend.position = 'bottom')
