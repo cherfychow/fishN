@@ -814,7 +814,7 @@ for (i in 1:3) {
 
 SAC_vid <- ggplot() +
   geom_point(data = SAC, aes(x = SACentry, y = spN, group = site_cam, color = method), 
-             alpha = 0.2, shape = 21) +
+             alpha = 0.1, shape = 21) +
   geom_ribbon(data = bind_rows(SAC_pred2), aes(x = SACentry, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
                                               fill = method), alpha = 0.4) +
   geom_line(data = bind_rows(SAC_pred2), aes(x = SACentry, y = fit, group = interaction(site_ID, method),
@@ -822,6 +822,6 @@ SAC_vid <- ggplot() +
   scale_color_manual(values = cherulean_palettes[['gomphosus']][c(1,4)], name = 'Method') +
   scale_fill_manual(values = cherulean_palettes[['gomphosus']][c(1,4)], name = 'Method') + looks +
   facet_wrap(vars(site_ID)) +
-  labs(x = "Time elapsed (s)", y = "Number of species")
+  labs(x = "Time elapsed (s)", y = "Number of species") + guides(color = 'none', fill = 'none')
 
 (SAC_rar / SAC_vid) * theme(legend.position = 'bottom')
