@@ -568,41 +568,41 @@ for (i in 1:n_distinct(dt_metrics$metrics)) {
 f_metrics[[3]] <- f_metrics[[3]] + scale_y_log10()
 f_metrics[[1]] <- f_metrics[[1]] + labs(y = 'SSB (kg)', x = '')
 
-f_metrics[[1]] + f_metrics[[2]] + f_metrics[[3]] + f_metrics[[4]] + f_metrics[[5]] + plot_layout(guides = "collect")
+(f_metrics[[1]] + f_metrics[[2]]) / (f_metrics[[3]] + f_metrics[[4]]) / f_metrics[[5]] + plot_layout(guides = "collect")
 
-## PCoA on metrics -----------------------------------------------------------
-
-set.seed(24)
-metrics_dis <- vegdist(dt_metrics[-(1:2)], method = "euclidean", diag = F, binary = F)
-metrics_pcoa <- ape::pcoa(metrics_dis, correction = "none")
-
-ggplot(data=metrics_pcoa$values[1:5,], aes(x=1:5, y=Relative_eig/sum(metrics_pcoa$values$Relative_eig))) +
-  geom_line() + geom_point(shape=21, fill='white', size=3) + labs(x=NULL, y=NULL) +
-  scale_x_continuous(breaks=c(1:10)) +
-  theme_bw(base_size = 13) + labs(title = "Scree plot (PCoA)")
-
-biplot(metrics_pcoa, rn = NULL)
-metrics_env <- envfit(metrics_pcoa$vectors, env = dt_metrics[-(1:2)], perm = 999)
-plot(metrics_env)
-
-dt_metricspcoa <- as.data.frame(metrics_pcoa$vectors) %>% bind_cols(., dt_metrics[1:2])
-metrics_vec <- 75 * scores(metrics_env, "vectors") %>% as.data.frame
-metrics_vec$metrics <- rownames(metrics_vec)
-
-f_metricpcoa <- ggplot(data = dt_metricspcoa) +
-  geom_segment(data = metrics_vec, aes(x = 0, y = 0, xend = Axis.1, yend = Axis.2), 
-               arrow = arrow(length = unit(1.5, "mm"), type = "closed"), color = 'grey') +
-  geom_text(data = metrics_vec, aes(x = Axis.1 + 5, y = Axis.2 + 5, label = metrics),
-                           size = 4, color = 'grey50') +
-  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
-  geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
-  looks + labs(x = "PCo1", y = "PCo2")+
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
-  scale_color_cherulean(palette = "cheridis", discrete = T, name = "Site") +
-  scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method") +
-  coord_fixed()
-
-f_metricpcoa
+# ## PCoA on metrics -----------------------------------------------------------
+# 
+# set.seed(24)
+# metrics_dis <- vegdist(dt_metrics[-(1:2)], method = "euclidean", diag = F, binary = F)
+# metrics_pcoa <- ape::pcoa(metrics_dis, correction = "none")
+# 
+# ggplot(data=metrics_pcoa$values[1:5,], aes(x=1:5, y=Relative_eig/sum(metrics_pcoa$values$Relative_eig))) +
+#   geom_line() + geom_point(shape=21, fill='white', size=3) + labs(x=NULL, y=NULL) +
+#   scale_x_continuous(breaks=c(1:10)) +
+#   theme_bw(base_size = 13) + labs(title = "Scree plot (PCoA)")
+# 
+# biplot(metrics_pcoa, rn = NULL)
+# metrics_env <- envfit(metrics_pcoa$vectors, env = dt_metrics[-(1:2)], perm = 999)
+# plot(metrics_env)
+# 
+# dt_metricspcoa <- as.data.frame(metrics_pcoa$vectors) %>% bind_cols(., dt_metrics[1:2])
+# metrics_vec <- 75 * scores(metrics_env, "vectors") %>% as.data.frame
+# metrics_vec$metrics <- rownames(metrics_vec)
+# 
+# f_metricpcoa <- ggplot(data = dt_metricspcoa) +
+#   geom_segment(data = metrics_vec, aes(x = 0, y = 0, xend = Axis.1, yend = Axis.2), 
+#                arrow = arrow(length = unit(1.5, "mm"), type = "closed"), color = 'grey') +
+#   geom_text(data = metrics_vec, aes(x = Axis.1 + 5, y = Axis.2 + 5, label = metrics),
+#                            size = 4, color = 'grey50') +
+#   geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
+#   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
+#   looks + labs(x = "PCo1", y = "PCo2")+
+#   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+#   scale_color_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+#   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method") +
+#   coord_fixed()
+# 
+# f_metricpcoa
 
 # ACCUMULATION/RAREFACTION CURVE -----------------------------------------------------------
 # Model species accumulation curves
