@@ -17,9 +17,9 @@ source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067
 # load files generated from previous analyses 
 # COMMENT OUT BEFORE SOURCING
 
-data_maxn <- read.csv('../data/data_MaxN.csv', header = T)
-data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
-output_poisson <- read.csv('../outputs/REST_final.csv', header = T)
+# data_maxn <- read.csv('../data/data_MaxN.csv', header = T)
+# data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
+# output_poisson <- read.csv('../outputs/REST_final.csv', header = T)
 
 # PCOA COMPOSITION COMPARISON -----------------------------------------------------------------
 
@@ -67,7 +67,7 @@ ggplot(data=method_pcoa$values[1:7,], aes(x=1:7, y=Relative_eig/sum(method_pcoa$
 pcoadt <- as.data.frame(method_pcoa$vectors) %>% bind_cols(., nmatrix[1:2])
 
 f_pcoa1 <- ggplot(data = pcoadt) +
-  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
+  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID, color = site_ID), alpha = 0.5) +
   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo1", y = "PCo2") +
   scale_color_cherulean(palette = 'cheridis', discrete = T, name = 'Site') +
@@ -99,20 +99,21 @@ ggplot(data=method_pcoa_rel$values[1:7,], aes(x=1:7, y=Relative_eig/sum(method_p
 
 relpcoadt <- as.data.frame(method_pcoa_rel$vectors) %>% bind_cols(., nmatrix_rel[1:2])
 f_relpcoa1 <- ggplot(data = relpcoadt) +
-  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
+  geom_polygon(aes(x = Axis.1, y = Axis.2, fill = site_ID, color = site_ID), alpha = 0.5) +
   geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo1", y = "PCo2")+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
+  scale_color_cherulean(palette = "cheridis", discrete = T, name = "Site") +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
 f_relpcoa2 <- ggplot(data = relpcoadt) +
-  geom_polygon(aes(x = Axis.3, y = Axis.4, fill = site_ID)) +
+  geom_polygon(aes(x = Axis.3, y = Axis.4, fill = site_ID, color = site_ID), alpha = 0.5) +
   geom_point(aes(x = Axis.3, y = Axis.4, fill = site_ID, shape = method), size = 3) +
   looks + labs(x = "PCo3", y = "PCo4")+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
-((f_pcoa1/f_pcoa2) | (f_relpcoa1/f_relpcoa2)) + plot_layout(guides = "collect")
+(f_pcoa1 / f_relpcoa1) + plot_layout(guides = "collect")
 
 
 # COMPARE ASSEMBLAGES BETWEEN CAMERAS ---------------------------------------
@@ -232,11 +233,14 @@ dt_all_size$midSize <- str_extract(dt_all_size$Size_class, '(?<=\\-|(\\<\\s))[:d
 dt_all_size$midSize[dt_all_size$midSize > 5] <- dt_all_size$midSize[dt_all_size$midSize > 5] -4
 dt_all_size$midSize[dt_all_size$midSize == 5] <- dt_all_size$midSize[dt_all_size$midSize == 5] - 2.5
 
-ggplot(dt_all_size) +
-  looks + scale_fill_cherulean(palette = "cheridis", discrete = T) +
-  geom_col(aes(x = midSize, y = n, fill = method), color = 'transparent', position = 'dodge') +
+sizespec <- dt_all_size[rep(1:nrow(dt_all_size), dt_all_size$n*100), c(1,2,5)]
+
+ggplot(sizespec) +
+  geom_density(aes(x = midSize, fill = method, color = method), alpha = 0.4) +
   labs(x = "Size class (cm)", y = 'Relative frequency') +
-  facet_wrap(vars(site_ID))
+  facet_grid(rows = vars(site_ID)) +
+  looks + scale_fill_cherulean(palette = "gomphosus", discrete = T) + 
+  scale_color_cherulean(palette = "gomphosus", discrete = T)
 
 pairs(dt_allmethods[,4:6], log = 'xy', pch = 1:7, cex = 1.2)
 # hinalea
@@ -428,7 +432,7 @@ ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Tax
   labs(x = 'Abundances', y = "Species frequency") + looks +
   scale_color_cherulean(palette = "cheridis", discrete = T, name = 'Method')
 
-ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Taxon) %>% 
+SAD <- ggplot(data = dt_all_long %>% filter(reln > 0) %>% group_by(site_ID, method, Taxon) %>% 
          summarise(reln = sum(reln))) +
   geom_density(aes(x = reln, color = method), linewidth = 0.5) +
   labs(x = 'Abundances', y = "Species frequency") + looks +
