@@ -25,6 +25,7 @@ source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067
 
 # prep REST to match the assemblage survey data like RUV or MaxN
 set.seed(24)
+looks <- theme_classic(base_size = 13) + theme(panel.grid = element_blank())
 
 data_uvc$Size_class[data_uvc$TL_cm <= 5] <- "_5"
 data_uvc$Size_class[data_uvc$TL_cm > 5 & data_uvc$TL_cm <= 10] <- "5_9"
@@ -219,7 +220,9 @@ f_pairscatter[[3]] <- ggplot(dt_allmethods) +
 (f_pairscatter[[1]] + f_pairscatter[[2]] + f_pairscatter[[3]]) * scale_x_log10() * scale_y_log10() + plot_layout(guides = "collect")
 (f_pairscatter[[1]] + f_pairscatter[[2]] + f_pairscatter[[3]]) + plot_layout(guides = "collect")
 
-# size spectra
+
+## Size spectra figures ----------------------------------------------------
+
 # make the counts relative by site totals first
 totals <- dt_all_long %>% group_by(method, site_ID) %>% summarise(total = sum(n))
 dt_all_size <- dt_all_long %>% group_by(site_ID, method, Size_class) %>% summarise(n = sum(n))
@@ -234,17 +237,21 @@ dt_all_size$midSize[dt_all_size$midSize > 5] <- dt_all_size$midSize[dt_all_size$
 dt_all_size$midSize[dt_all_size$midSize == 5] <- dt_all_size$midSize[dt_all_size$midSize == 5] - 2.5
 
 sizespec <- dt_all_size[rep(1:nrow(dt_all_size), dt_all_size$n*100), c(1,2,5)]
+sizespec <- sizespec %>% filter(!method == 'UVC')
+temp <- data_uvc %>% filter(site_ID %in% unique(dt_all_size$site_ID)) %>% select(site_ID, TL_cm, count)
+sizespec <- temp[rep(1:nrow(temp), temp$count), 1:2] %>% rename(midSize = TL_cm) %>% mutate(method = 'UVC', .before = midSize) %>% bind_rows(sizespec, .)
 
-ggplot(sizespec) +
+f_size <- ggplot(sizespec) +
   geom_density(aes(x = midSize, fill = method, color = method), alpha = 0.4) +
-  labs(x = "Size class (cm)", y = 'Relative frequency') +
-  facet_grid(rows = vars(site_ID)) +
+  labs(x = "Observed TL (cm)", y = 'Frequency') +
+  facet_grid(cols = vars(site_ID)) +
   looks + scale_fill_cherulean(palette = "gomphosus", discrete = T) + 
-  scale_color_cherulean(palette = "gomphosus", discrete = T)
+  scale_color_cherulean(palette = "gomphosus", discrete = T) + 
+  theme(strip.background = element_blank(), strip.text = element_blank())
 
-pairs(dt_allmethods[,4:6], log = 'xy', pch = 1:7, cex = 1.2)
-# hinalea
-pairs(dt_allmethods[dt_allmethods$site_ID == 'hale_hinalea', 4:6], log = 'xy', pch = 1:7, cex = 1.2)
+# pairs(dt_allmethods[,4:6], log = 'xy', pch = 1:7, cex = 1.2)
+# # hinalea
+# pairs(dt_allmethods[dt_allmethods$site_ID == 'hale_hinalea', 4:6], log = 'xy', pch = 1:7, cex = 1.2)
 
 ## TALLIES --------------------------------------------
 # exclusive species check
@@ -330,7 +337,7 @@ for (i in 1:3) { # each model
                                                     upr = fit + 1.96 * se.fit))
 }
 # add newx to the prediction data frame
-predicts[[1]] <- predicts[[1]] %>% bind_cols(newx %>% select(Group))
+predicts[[1]] <- predicts[[1]] %>% bind_cols(newx %>% select(REST, Group))
 predicts[[2]] <- predicts[[2]] %>% bind_cols(newx %>% select(REST, Group))
 predicts[[3]] <- predicts[[3]] %>% bind_cols(newx %>% select(UVC, Group))
 
@@ -352,7 +359,7 @@ f_abundpair[[2]] <- ggplot(dt_allmethods) +
   geom_ribbon(data = predicts[[2]], aes(x = log(REST + 1), ymin = lwr, ymax = upr), 
               linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
   geom_line(data = predicts[[2]], aes(x = log(REST + 1), y = fitted)) +
-  labs(x = 'log(REST)', y = 'log(Point count)')+
+  labs(x = 'log(REST)', y = 'log(UVC)')+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 # UVC - MaxN
@@ -362,7 +369,7 @@ f_abundpair[[3]] <- ggplot(dt_allmethods) +
   geom_ribbon(data = predicts[[3]], 
               aes(x = log(UVC + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
   geom_line(data = predicts[[3]], aes(x = log(UVC + 1), y = fitted)) +
-  labs(x = 'log(Point count)', y = 'log(MaxN)')+
+  labs(x = 'log(UVC)', y = 'log(MaxN)')+
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 (f_abundpair[[1]] + f_abundpair[[2]] + f_abundpair[[3]]) * looks * coord_cartesian(xlim = c(0,4.75), ylim = c(0,4.75)) + plot_layout(guides = "collect")
@@ -403,7 +410,7 @@ f_abundsoc[[2]] <- ggplot(dt_abund) +
                  color = 'grey20', width = 0.2) +
   geom_point(data = predicts[[5]], aes(x = Group + 0.25, y = fitted), 
              color = 'grey20', size = 2.5) +
-  labs(x = 'Sociality', y = 'log(Point count)')
+  labs(x = 'Sociality', y = 'log(UVC)')
 
 f_abundsoc[[3]] <- ggplot(dt_abund) +
   ggdist::stat_slab(aes(x = Group, y = log(MaxN + 1)), 
@@ -418,6 +425,26 @@ f_abundsoc[[3]] <- ggplot(dt_abund) +
   labs(x = 'Sociality', y = 'log(MaxN)')
 
 (f_abundsoc[[1]] + f_abundsoc[[2]] + f_abundsoc[[3]]) * looks * scale_x_continuous(breaks = c(1:5)) * coord_cartesian(xlim = c(0.5,5.7), ylim = c(0,4.75), clip = 'off') + plot_layout(guides = "collect")
+
+
+## Model effects figure ----------------------------------------------------
+
+pair_effects <- data.frame(model = rep(c('MaxN_REST', 'Point_REST', 'MaxN_Point'), each = 2), 
+                           par = rep(c('method', 'sociality'), 3), 
+                           estimate = sapply(model_methodpairs[c(4:6)], FUN = function (x) {coefficients(x)[2:3]}, simplify = T) %>% as.vector, 
+                           se = sapply(model_methodpairs[c(4:6)], FUN = function (x) {summary(x)$coefficients[-1,2]}, simplify = T) %>% as.vector)
+pair_effects$lwr <- with(pair_effects, estimate - 1.96 * se)
+pair_effects$upr <- with(pair_effects, estimate + 1.96 * se)
+
+f_effects <- ggplot(data = pair_effects) +
+  geom_vline(xintercept = 0, linetype = 'dashed', color = 'grey60') +
+  geom_linerange(aes(xmin = lwr, xmax = upr, y = model, color = par), linewidth = 1.1) +
+  geom_point(aes(x = estimate, y = model, color = par), size = 3) +
+  scale_color_cherulean(palette = "cheridis", discrete = T, name = NULL) + looks +
+  labs(y = NULL, x = 'Effect estimate')
+
+f_effects + f_size + plot_layout(guides = 'collect', widths = c(1,3))
+  
 
 # SADs --------------------------------------------
 # do it on size aggregated data
@@ -612,7 +639,7 @@ temp <- dt_all_long %>% group_by(site_ID, Taxon, method) %>%
 temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = sum(round(n, 0))) # use for sample size, as in total number of individuals
 # temp2 <- dt_all_long %>% ungroup() %>% filter(n > 0) %>% group_by(site_ID, method) %>% summarise(total = length(unique(Taxon))) # use for sample size, as in total number of individuals
 
-# hard to use timestamps for point count species accumulation, so we'll do it by abundance-weighted sampling
+# hard to use timestamps for UVC species accumulation, so we'll do it by abundance-weighted sampling
 dt_SAC <- as.list(rep('', 9))
 for(i in 1:9) {
   dt_SAC[[i]] <- data.frame(site_ID = temp[[i]]$site_ID[1], method = temp[[i]]$method[1],
@@ -758,7 +785,7 @@ SAC$method <- 'MaxN'
 
 # do again, filtering out the species that REST didn't have
 SAC2 <- data_ruv2 %>% mutate(site_cam = paste(site_ID, Camera, sep = "_"), site_sp = paste(site_ID, Taxon, sep = "_")) %>% 
-  filter(site_sp %in% with(data_rest, paste(site_ID, Taxon, sep="_"))) %>% 
+  filter(site_sp %in% with(data_rest %>% filter(!is.na(D)), paste(site_ID, Taxon, sep="_"))) %>% 
   select(site_ID, site_cam, site_sp, SACentry)  # matches the row index of data_ruv
 
 # make the SAC times relative to the time of first observation
@@ -829,3 +856,4 @@ SAC_vid <- ggplot() +
   labs(x = "Time elapsed (s)", y = "Number of species") + guides(color = 'none', fill = 'none')
 
 (SAC_rar / SAC_vid) * theme(legend.position = 'bottom')
+SAC_vid + theme(strip.text = element_blank(), strip.background = element_blank())
