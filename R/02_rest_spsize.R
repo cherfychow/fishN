@@ -11,7 +11,7 @@ require(beepr)
 # custom palettes to be extra
 source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/899dcfc1745421cb4e6ba26826b0bfe55fd8ec14/cherulean.R')
 
-# data_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
+data_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
 
 # convert this to a lubridate duration data type
 data_ruv$entrytime_c <- ms(data_ruv$Time_entry) %>% as.duration
@@ -63,49 +63,52 @@ output_poisson <- distinct(data_ruv, site_ID, Camera) %>% group_by(site_ID) %>%
 # Poisson needs lambda = mean = variance
 # Gamma needs shape = mean, scale = ratio between variance and mean. Set scale = 1 by default. 
 
-output_poisson <- mutate(output_poisson, shapeT = NA, scaleT = NA, lambdaY = NA, Lvalue = NA, estPar = NA) %>% as.data.frame() # add blank cols to fill with par estimates
+output_poisson <- mutate(output_poisson, shapeT = NA, scaleT = NA, lambdaY = NA, Lvalue = NA) %>% as.data.frame() # add blank cols to fill with par estimates
 output_poisson_hess <- as.list(rep(0, nrow(output_poisson)))
 
 # NEST LEVELS: species-site-camera-detection
 for (i in 1:nrow(output_poisson)) {
   
-    set.seed(240) # replicability
-    # vector of detections per camera i at site
-    detects <- data_ruv %>% 
-      filter(site_ID == output_poisson$site_ID[i], Taxon == output_poisson$Taxon[i], Size_class == output_poisson$Size_class[i]) %>% 
-      group_by(Camera) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
-      pull(detects)
-    
-    # Establish MLE likelihood function
-    REST_poisson <- function(par) { # where par is a vector c(gamma shape, gamma scale, poisson lambda)
-      Tij <- rep(0,output_poisson$cam[i]) # empty vector to fill in with Tij estimates per camera
-      for (n in 1:output_poisson$cam[i]) {
-        # make a data object for staying time per site-camera
-        stay <- data_ruv %>% filter(site_ID == output_poisson$site_ID[i], Taxon == output_poisson$Taxon[i], Size_class == output_poisson$Size_class[i],
-                                    Camera == sitecam[sitecam$site_ID == output_poisson$site_ID[i], 2][n]) %>% pull(staytime)
-        # do the most nested level first, Tij staying time
-        for (x in 1:n) {
-          Tij[x] <- dgamma(x = stay, shape = par[1], scale = par[2], log = T) %>% sum # params[1] = shape
-        }
+  set.seed(240) # replicability
+  # vector of detections per camera i at site
+  detects <- data_ruv %>% 
+    filter(site_ID == output_poisson$site_ID[i], Taxon == output_poisson$Taxon[i], Size_class == output_poisson$Size_class[i]) %>% 
+    group_by(Camera) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
+    pull(detects)
+  
+  # Establish MLE likelihood function
+  REST_poisson <- function(par) { # where par is a vector c(gamma shape, gamma scale, poisson lambda)
+    Tij <- rep(0,output_poisson$cam[i]) # empty vector to fill in with Tij estimates per camera
+    for (n in 1:output_poisson$cam[i]) {
+      # make a data object for staying time per site-camera
+      stay <- data_ruv %>% filter(site_ID == output_poisson$site_ID[i], Taxon == output_poisson$Taxon[i], Size_class == output_poisson$Size_class[i],
+                                  Camera == sitecam[sitecam$site_ID == output_poisson$site_ID[i], 2][n]) %>% pull(staytime)
+      # do the most nested level first, Tij staying time
+      for (x in 1:n) {
+        Tij[x] <- dgamma(x = stay, shape = par[1], scale = par[2], log = T) %>% sum # params[1] = shape
       }
-      return(
-        -1 * ( sum(dpois(x = detects, lambda = par[3], log = T)) + sum(Tij) ) # params[2] = lambda
-      )
     }
-    # put that through the optimise function
-    # with error handling
-    optout <- tryCatch(optim(par = c(0.5,0.5,9), REST_poisson, method = "L-BFGS-B", lower = c(0,0,0), upper = c(2000,9,450), hessian = T),
-                       error = function(e) e)
-    if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
-    
-    output_poisson[i,5:7] <- optout$par
-    output_poisson$Lvalue[i] <- optout$value
-    output_poisson_hess[[i]] <- optout$hessian
-    output_poisson$estPar[i] <- 3
+    return(
+      -1 * ( sum(dpois(x = detects, lambda = par[3], log = T)) + sum(Tij) ) # params[2] = lambda
+    )
+  }
+  # put that through the optimise function
+  # with error handling
+  optout <- tryCatch(optim(par = c(0.5,0.5,9), REST_poisson, method = "L-BFGS-B", lower = c(0,0,0), upper = c(2000,9,450), hessian = T),
+                     error = function(e) e)
+  if(inherits(optout, "error")) next # if an error message gets generated this run, move to the next iteration of the loop
+  
+  output_poisson[i,5:7] <- optout$par
+  output_poisson$Lvalue[i] <- optout$value
+  output_poisson_hess[[i]] <- optout$hessian
 }
 beep()
 
-## Fit 2: 2 parameter (scale = 1) ------------------------------------------
+output_poisson %>% filter(is.na(shapeT)) %>% nrow # how many unconverged
+output_poisson %>% filter(is.na(shapeT)== F) %>% nrow # 54 models converged
+
+
+## Fit 2: use the density equation to reduce estimated parameters ------------------------------------------
 
 # for models that couldn't converge/optimise, set scale = 1
 
@@ -129,11 +132,11 @@ for (i in 1:nrow(output_poisson)) {
                                   Camera == sitecam[sitecam$site_ID == output_poisson$site_ID[i], 2][n]) %>% pull(staytime)
       # do the most nested level first, Tij staying time
       for (x in 1:n) {
-        Tij[x] <- dgamma(x = stay, shape = par[1], scale = 1, log = T) %>% sum # params[1] = shape
+        Tij[x] <- dgamma(x = stay, shape = par[1], scale = par[2], log = T) %>% sum # params[1] = shape
       }
     }
     return(
-      -1 * (sum(dpois(x = detects, lambda = par[2], log = T)) + sum(Tij)) # params[2] = lambda
+      -1 * (sum(dpois(x = detects, lambda = par[3], log = T)) + sum(Tij)) # params[2] = lambda
     )
   }
   # put that through the optimise function
@@ -245,7 +248,7 @@ output_poisson <- output_poisson %>% filter(!is.na(lambda_se))
 # s = detection zone, 4 sq m
 # H = observation period, 45 minutes = 2700 s, seconds to line up with
 
-output_poisson$D <- with(output_poisson, (shapeT * scaleT * lambdaY) / (2700 * 4 * cam)) * 250 # scale by 250 to put density values as per transect
+output_poisson$D <- with(output_poisson, (shapeT * scaleT * lambdaY) / (2700 * 6.75 * cam)) * 250 # scale by 250 to put density values as per transect
 # clear up temporary objects from model fitting
 rm(s, se, var2, notNA2, notNA3, i, n, sitecam, detects, j)
 
@@ -260,7 +263,7 @@ set.seed(240) # reproducibility :)
 boots = 5000 # how many iterations
 
 for (i in 1:nrow(output_poisson)) {
-
+  
   boot_p[[i]] <- matrix(nrow = boots, ncol = 3) # empty matrix for each bootstrap iteration
   colnames(boot_p[[i]]) <- c('predT', 'predY', 'predD')
   
@@ -272,7 +275,7 @@ for (i in 1:nrow(output_poisson)) {
   }
   
   # calculate D from the sampled T and Y parameters
-  boot_p[[i]][,3] = (boot_p[[i]][,1] * boot_p[[i]][,2] / (2700 * 4 * output_poisson$cam[i])) * 250
+  boot_p[[i]][,3] = (boot_p[[i]][,1] * boot_p[[i]][,2] / (2700 * 6.75 * output_poisson$cam[i])) * 250
 }
 beep()
 

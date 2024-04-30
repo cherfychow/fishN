@@ -5,7 +5,7 @@
 
 # object requirements:
 # data_ruv
-# output_poisson
+# output_rest
 # output_nb
 # and their bootstrap objects
 
@@ -14,8 +14,9 @@ require(ggplot2)
 require(patchwork)
 require(lubridate)
 require(ggthemes)
+require(stringr)
 require(ggdist)
-source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/899dcfc1745421cb4e6ba26826b0bfe55fd8ec14/cherulean.R')
+source('https://gist.github.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/b2db138ab8164c237129308ea643de78cd54b252/cherulean.R')
 
 # make sure size class is read as an ordered factor
 data_ruv$Size_class <- factor(data_ruv$Size_class, levels = c('_5', '5_9', '10_19', 
@@ -61,46 +62,45 @@ ggplot(data = temp) +
 # REST estimates ---------------------------------------------------------
 
 # plot the bootstrapped estimates of D
-bootD <- data.frame(Taxon = output_poisson$Taxon[1],
-                    site_ID = output_poisson$site_ID[1],
-                    Size_class = output_poisson$Size_class[1],
+bootD <- data.frame(Taxon = output_rest$Taxon[1],
+                    site_ID = output_rest$site_ID[1],
+                    Size_class = output_rest$Size_class[1],
                     boots = boot_p[[1]][,3])
 for (i in 2:length(boot_p)) {
   # extract the bootstrapped densities
-  temp <- data.frame(Taxon = output_poisson$Taxon[i],
-                     site_ID = output_poisson$site_ID[i],
-                     Size_class = output_poisson$Size_class[i],
+  temp <- data.frame(Taxon = output_rest$Taxon[i],
+                     site_ID = output_rest$site_ID[i],
+                     Size_class = output_rest$Size_class[i],
                      boots = boot_p[[i]][,3])
   bootD <- rbind(bootD, temp)
 } # collapse bootstrap runs for each species-size into a long format dataframe
 rm(temp)
 
 pretty <- c('^\\_' = '\\< ', '(?<=[:digit:])\\_' = '\\-')
-output_poisson$Size_class <- str_replace_all(output_poisson$Size_class, pretty) %>% 
+output_rest$Size_class <- str_replace_all(output_rest$Size_class, pretty) %>% 
   factor(., levels = c('< 5', '5-9', '10-19', 
                        '20-29', '30-39'), ordered = T)
 
 densities <- ggplot() +
   # stat_slab(data = bootD %>% filter(site_ID == 'hale_kaku'), 
   #             aes(y = Taxon, x = boots, fill = Size_class), height = 6, alpha = 0.5) +
-  geom_pointrange(data = output_poisson, 
+  geom_pointrange(data = output_rest, 
                   aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1) +
   labs(x = "Bootstrapped density", y = "Species") +
   theme(legend.position = "bottom") + theme_linedraw(base_size = 13) + 
   scale_colour_cherulean(palette = 'cheridis', discrete = T, name = "Size class (cm)") +
-  facet_grid(cols = vars(site_ID)) + scale_x_log10(breaks = c(0, 0.1, 1, 10, 100),
-                                                   labels = c(0, 0.1, 1, 10, 100))
+  facet_grid(cols = vars(site_ID)) + scale_x_log10() + theme(axis.text.y = element_text(face = 'italic'))
 densities + theme(legend.position = 'bottom')
 
 # raincloud of modelled densities
 
 # Hale Kaku
-# D1 <- ggplot(data = output_poisson %>% filter(site_ID == 'hale_kaku')) +
+# D1 <- ggplot(data = output_rest %>% filter(site_ID == 'hale_kaku')) +
 #   geom_pointrange(aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1) +
 #   theme_bw() + labs(x = "Estimated density", y = "Species", subtitle = "Hale Kaku") +
 #   theme(legend.position = "bottom")
 # 
-# D2 <- ggplot(data = output_poisson %>% filter(site_ID == 'hale_kinalea')) +
+# D2 <- ggplot(data = output_rest %>% filter(site_ID == 'hale_kinalea')) +
 #   geom_pointrange(aes(y = Taxon, x = D, color = Size_class, xmin = lwr, xmax = upr), linewidth = 1.5) +
 #   theme_bw() + labs(x = "Estimated density", y = "Species", subtitle = "Hale Kinalea") + 
 #   theme(legend.position = "bottom")

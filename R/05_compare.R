@@ -19,7 +19,7 @@ source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067
 
 # data_maxn <- read.csv('../data/data_MaxN.csv', header = T)
 # data_uvc <- read.csv('../data/uvc_himb.csv', header = T)
-# output_poisson <- read.csv('../outputs/REST_final.csv', header = T)
+# output_rest <- read.csv('../outputs/REST_final.csv', header = T)
 
 # PCOA COMPOSITION COMPARISON -----------------------------------------------------------------
 
@@ -34,9 +34,10 @@ data_uvc$Size_class[data_uvc$TL_cm > 20 & data_uvc$TL_cm <= 30] <- "20_29"
 data_uvc$Size_class[data_uvc$TL_cm > 30 & data_uvc$TL_cm <= 40] <- "30_39"
 data_uvc$Size_class[data_uvc$TL_cm > 40 & data_uvc$TL_cm <= 50] <- "40_49"
 data_uvc$Size_class[data_uvc$TL_cm > 50 & data_uvc$TL_cm <= 60] <- "50_59"
+data_ruv2$spsize <- with(data_ruv2, paste(Taxon, Size_class, sep = "_"))
 
 data_rest <- data_ruv2 %>% distinct(site_ID, Taxon, Size_class, spsize) %>% 
-  left_join(., output_poisson[c(1,3,4,12)], by=c("site_ID", "Taxon", "Size_class"))
+  left_join(., output_rest %>% select(site_ID, Taxon, Size_class, pred), by=c("site_ID", "Taxon", "Size_class"))
 
 # cross-method comparison doesn't have to deal with size classes
 # construct the community matrix
@@ -114,7 +115,7 @@ f_relpcoa2 <- ggplot(data = relpcoadt) +
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Site") +
   scale_shape_manual(values = 21:23, labels = c('MaxN', 'REST', 'UVC'), name = "Method")
 
-(f_pcoa1 / f_relpcoa1) + plot_layout(guides = "collect")
+(f_relpcoa1 / f_pcoa1) + plot_layout(guides = "collect")
 
 
 # COMPARE ASSEMBLAGES BETWEEN CAMERAS ---------------------------------------
@@ -179,7 +180,7 @@ f_maxncam[[2]] <- ggplot(data = dt_maxnpcoa) +
 
 dt_allmethods <- data_maxn %>% group_by(site_ID, Taxon, Size_class) %>% summarise(MaxN = sum(MaxN)) %>% 
   full_join(., data_rest[-4], by = c('site_ID', 'Taxon', 'Size_class')) %>% 
-  rename(., REST = D)
+  rename(., REST = pred)
 dt_allmethods <- data_uvc %>% group_by(site_ID, Taxon, Size_class) %>% 
   summarise(UVC = sum(count)) %>% ungroup() %>% filter(str_detect(site_ID, 'kaku|hinalea|sunset')) %>% 
   full_join(., dt_allmethods, by = c('site_ID', 'Taxon', 'Size_class'))
@@ -350,6 +351,7 @@ f_abundpair[[1]] <- ggplot(dt_abund) +
               aes(x = log(REST + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
   geom_line(data = predicts[[1]], aes(x = log(REST + 1), y = fitted)) +
   labs(x = 'log(REST)', y = 'log(MaxN)') +
+  coord_cartesian(xlim = c(-.05,0.1), ylim = c(0,4.75)) +
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 # REST - UVC
@@ -359,7 +361,8 @@ f_abundpair[[2]] <- ggplot(dt_allmethods) +
   geom_ribbon(data = predicts[[2]], aes(x = log(REST + 1), ymin = lwr, ymax = upr), 
               linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
   geom_line(data = predicts[[2]], aes(x = log(REST + 1), y = fitted)) +
-  labs(x = 'log(REST)', y = 'log(UVC)')+
+  labs(x = 'log(REST)', y = 'log(UVC)') +
+  coord_cartesian(xlim = c(-.05,0.1), ylim = c(0,4.75)) +
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
 # UVC - MaxN
@@ -370,9 +373,10 @@ f_abundpair[[3]] <- ggplot(dt_allmethods) +
               aes(x = log(UVC + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
   geom_line(data = predicts[[3]], aes(x = log(UVC + 1), y = fitted)) +
   labs(x = 'log(UVC)', y = 'log(MaxN)')+
+  coord_cartesian(xlim = c(0,4.75), ylim = c(0,4.75)) +
   scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
 
-(f_abundpair[[1]] + f_abundpair[[2]] + f_abundpair[[3]]) * looks * coord_cartesian(xlim = c(0,4.75), ylim = c(0,4.75)) + plot_layout(guides = "collect")
+(f_abundpair[[1]] + f_abundpair[[2]] + f_abundpair[[3]]) * looks * theme(legend.position = "none")
 
 # partial regression plots for partial sociality effects
 # generate partial predictions for sociality, held at abundance mean
@@ -429,7 +433,7 @@ f_abundsoc[[3]] <- ggplot(dt_abund) +
 
 ## Model effects figure ----------------------------------------------------
 
-pair_effects <- data.frame(model = rep(c('MaxN_REST', 'Point_REST', 'MaxN_Point'), each = 2), 
+pair_effects <- data.frame(model = rep(c('MaxN ~ REST', 'UVC ~ REST', 'MaxN ~ UVC'), each = 2), 
                            par = rep(c('method', 'sociality'), 3), 
                            estimate = sapply(model_methodpairs[c(4:6)], FUN = function (x) {coefficients(x)[2:3]}, simplify = T) %>% as.vector, 
                            se = sapply(model_methodpairs[c(4:6)], FUN = function (x) {summary(x)$coefficients[-1,2]}, simplify = T) %>% as.vector)
@@ -441,7 +445,7 @@ f_effects <- ggplot(data = pair_effects) +
   geom_linerange(aes(xmin = lwr, xmax = upr, y = model, color = par), linewidth = 1.1) +
   geom_point(aes(x = estimate, y = model, color = par), size = 3) +
   scale_color_cherulean(palette = "cheridis", discrete = T, name = NULL) + looks +
-  labs(y = NULL, x = 'Effect estimate')
+  labs(y = NULL, x = 'Effect estimate') + scale_x_log10()
 
 f_effects + f_size + plot_layout(guides = 'collect', widths = c(1,3))
   
@@ -595,7 +599,7 @@ for (i in 1:n_distinct(dt_metrics$metrics)) {
 f_metrics[[3]] <- f_metrics[[3]] + scale_y_log10()
 f_metrics[[1]] <- f_metrics[[1]] + labs(y = 'SSB (kg)', x = '')
 
-(f_metrics[[1]] + f_metrics[[2]]) / (f_metrics[[3]] + f_metrics[[4]]) / f_metrics[[5]] + plot_layout(guides = "collect")
+((f_metrics[[1]] + f_metrics[[2]] + f_metrics[[3]]) / (f_metrics[[4]] + f_metrics[[5]] + plot_spacer())) + plot_layout(guides = "collect")
 
 # ## PCoA on metrics -----------------------------------------------------------
 # 
