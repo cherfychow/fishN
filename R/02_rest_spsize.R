@@ -11,40 +11,40 @@ require(beepr)
 # custom palettes to be extra
 source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/899dcfc1745421cb4e6ba26826b0bfe55fd8ec14/cherulean.R')
 
-data_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
+dt_ruv <- read.csv('../data/ruv_himb_pilot.csv', header = T)
 
 # convert this to a lubridate duration data type
-data_ruv$entrytime_c <- ms(data_ruv$Time_entry) %>% as.duration
-data_ruv$exittime_c <- ms(data_ruv$Time_exit) %>% as.duration
+dt_ruv$entrytime_c <- ms(dt_ruv$Time_entry) %>% as.duration
+dt_ruv$exittime_c <- ms(dt_ruv$Time_exit) %>% as.duration
 # calculate staying time duration
-data_ruv$staytime <- with(data_ruv, exittime_c - entrytime_c) %>% as.numeric
-summary(data_ruv)
-data_ruv <- data_ruv %>% filter(staytime > 0) # remove any zero second occurrences
+dt_ruv$staytime <- with(dt_ruv, exittime_c - entrytime_c) %>% as.numeric
+summary(dt_ruv)
+dt_ruv <- dt_ruv %>% filter(staytime > 0) # remove any zero second occurrences
 
 ## define some global parameters
 # site-camera key
-sitecam <- distinct(data_ruv, site_ID, Camera)
+sitecam <- distinct(dt_ruv, site_ID, Camera)
 sites = 3
-cams = c(4,3,4) # in the order of sites shown in unique(data_ruv$site_ID)
-# because the model loop runs on data_ruv
+cams = c(4,3,4) # in the order of sites shown in unique(dt_ruv$site_ID)
+# because the model loop runs on dt_ruv
 
 # make a reference vector for species that REST can run on
 # criteria: at least 10 detections total at a site
-rest_output <- data_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
+rest_output <- dt_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
   filter(occurrences >= 5) %>% select(!occurrences)
 
-data_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% View
+dt_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% View
 # how many species-length classes can't fit
-less5 <- data_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
+less5 <- dt_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% 
   filter(occurrences < 5) %>% nrow
 # total species size class
-spsize <- data_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% nrow
+spsize <- dt_ruv %>% group_by(site_ID, Taxon, Size_class) %>% summarise(occurrences = sum(Count)) %>% ungroup %>% nrow
 less5/spsize # 0.4545
 
 rm(less5, spsize)
 
 # add a col on the number of cameras for the sites
-rest_output <- distinct(data_ruv, site_ID, Camera) %>% group_by(site_ID) %>% 
+rest_output <- distinct(dt_ruv, site_ID, Camera) %>% group_by(site_ID) %>% 
   summarise(cam = n_distinct(Camera)) %>% ungroup() %>% 
   full_join(., rest_output, by="site_ID")
 
@@ -76,7 +76,7 @@ for (i in 1:nrow(rest_output)) {
   
   set.seed(240) # replicability
   # vector of detections per camera i at site
-  detects <- data_ruv %>% 
+  detects <- dt_ruv %>% 
     filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i]) %>% 
     group_by(Camera) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
     pull(detects)
@@ -86,7 +86,7 @@ for (i in 1:nrow(rest_output)) {
     Tij <- rep(0,rest_output$cam[i]) # empty vector to fill in with Tij estimates per camera
     for (n in 1:rest_output$cam[i]) {
       # make a data object for staying time per site-camera
-      stay <- data_ruv %>% filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i],
+      stay <- dt_ruv %>% filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i],
                                   Camera == sitecam[sitecam$site_ID == rest_output$site_ID[i], 2][n]) %>% pull(staytime)
       # do the most nested level first, Tij staying time
       for (x in 1:n) {
@@ -126,13 +126,13 @@ for (i in 1:nrow(rest_output)) {
   
   set.seed(240) # replicability
   # vector of detections per camera i at site
-  detects <- data_ruv %>% 
+  detects <- dt_ruv %>% 
     filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i]) %>% 
     group_by(Camera) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
     pull(detects)
   
   # calculate the cumulative staying time parameter DsH
-  DsH <- data_ruv %>% filter(site_ID == rest_output$site_ID[i], 
+  DsH <- dt_ruv %>% filter(site_ID == rest_output$site_ID[i], 
                              Taxon == rest_output$Taxon[i], 
                              Size_class == rest_output$Size_class[i]) %>% pull(staytime) %>% sum
   
@@ -141,7 +141,7 @@ for (i in 1:nrow(rest_output)) {
     Tij <- rep(0,rest_output$cam[i]) # empty vector to fill in with Tij estimates per camera
     for (n in 1:rest_output$cam[i]) {
       # make a data object for staying time per site-camera
-      stay <- data_ruv %>% filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i],
+      stay <- dt_ruv %>% filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i],
                                   Camera == sitecam[sitecam$site_ID == rest_output$site_ID[i], 2][n]) %>% pull(staytime)
       # do the most nested level first, Tij staying time
       for (x in 1:n) {
@@ -218,13 +218,13 @@ for (i in reruns) {
   
   set.seed(240) # replicability
   # vector of detections per camera i at site
-  detects <- data_ruv %>% 
+  detects <- dt_ruv %>% 
     filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i]) %>% 
     group_by(Camera) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
     pull(detects)
   
   # calculate the cumulative staying time parameter DsH
-  DsH <- data_ruv %>% filter(site_ID == rest_output$site_ID[i], 
+  DsH <- dt_ruv %>% filter(site_ID == rest_output$site_ID[i], 
                              Taxon == rest_output$Taxon[i], 
                              Size_class == rest_output$Size_class[i]) %>% pull(staytime) %>% sum
   
@@ -233,7 +233,7 @@ for (i in reruns) {
     Tij <- rep(0,rest_output$cam[i]) # empty vector to fill in with Tij estimates per camera
     for (n in 1:rest_output$cam[i]) {
       # make a data object for staying time per site-camera
-      stay <- data_ruv %>% filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i],
+      stay <- dt_ruv %>% filter(site_ID == rest_output$site_ID[i], Taxon == rest_output$Taxon[i], Size_class == rest_output$Size_class[i],
                                   Camera == sitecam[sitecam$site_ID == rest_output$site_ID[i], 2][n]) %>% pull(staytime)
       # do the most nested level first, Tij staying time
       for (x in 1:n) {
@@ -329,7 +329,7 @@ rest_output <- rest_output %>% filter(!is.na(shapeT))
 # 2k - 2log(L) + (2k^2 + 2k) / (n - k - 1)
 
 # first need the number of detections
-rest_output <- data_ruv %>% 
+rest_output <- dt_ruv %>% 
   group_by(site_ID, Taxon, Size_class) %>% summarise(detects = sum(Count)) %>% # Counts because some detections are grouped
   left_join(rest_output, ., by=c("site_ID", "Taxon", "Size_class")) %>% ungroup  
 rest_output$AICc <- with(rest_output, 2*ifelse(fit == 1, 3, 2) - 2*log(Lvalue) + ((2*ifelse(fit == 1, 3, 2)^2 + 2*ifelse(fit == 1, 3, 2)) / (detects - ifelse(fit == 1, 3, 2) - 1)))
