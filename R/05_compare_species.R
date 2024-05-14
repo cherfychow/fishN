@@ -16,7 +16,7 @@ require(nlstools)
 source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/b2db138ab8164c237129308ea643de78cd54b252/cherulean.R')
 
 set.seed(24)
-looks <- theme_classic(base_size = 13, base_family = "Inter") + 
+looks <- theme_classic(base_size = 13) + 
   theme(panel.grid = element_blank(), axis.ticks = element_line(linewidth = .75), axis.line = element_line(linewidth = .75))
 
 # load files generated from previous analyses 
@@ -510,10 +510,11 @@ SAC <- temp %>% group_by(site_ID, transect_point) %>% summarise(spN = max(spN)) 
   bind_rows(., SAC)
 
 sac_fit <- as.list(rep(NA, 9))
+tempSAC <-  SAC %>% filter(str_detect(method, 'cameras') == F) %>% select(!site_cam)
 for (i in 1:3) {
   for (j in 1:3) {
-    sac_fit[[i + (j-1)*3]] <- nls(data = SAC %>% 
-                                     filter(site_ID == unique(SAC$site_ID)[i], method == unique(SAC$method)[j]),
+    sac_fit[[i + (j-1)*3]] <- nls(data = tempSAC %>% 
+                                     filter(site_ID == unique(tempSAC$site_ID)[i], method == unique(tempSAC$method)[j]),
                          formula = spN ~ a - ((a-b)*exp(-c*time)),
                          start = list(a = 11, b = 1, c = 0.1))
   }
@@ -528,7 +529,7 @@ for (i in 1:3) {
       nlsBoot(sac_fit[[i + (j-1)*3]], niter=500), 
       newdata = newx, interval = "confidence") %>% as.data.frame
     colnames(sac_pred[[i + (j-1)*3]]) <- c('fit', 'lwr', 'upr')
-    sac_pred[[i + (j-1)*3]] <- data.frame(site_ID = unique(SAC$site_ID)[i], method = unique(SAC$method)[j],
+    sac_pred[[i + (j-1)*3]] <- data.frame(site_ID = unique(tempSAC$site_ID)[i], method = unique(tempSAC$method)[j],
                                  time = newx) %>% bind_cols(., sac_pred[[i + (j-1)*3]])
   }
 }
@@ -536,9 +537,8 @@ for (i in 1:3) {
 
 
 f_SAC <- ggplot() +
-  geom_point(data = SAC %>% filter(method != 'UVC'), aes(x = time, y = spN, group = site_cam, color = method), 
-             alpha = 0.1, shape = 21) +
-  geom_point(data = SAC %>% filter(method == 'UVC'), aes(x = time, y = spN, color = method), shape = 21) +
+  geom_point(data = tempSAC %>% filter(method != 'UVC'), aes(x = time, y = spN, color = method), shape = 21, alpha = 0.1) +
+  geom_point(data = tempSAC %>% filter(method == 'UVC'), aes(x = time, y = spN, color = method), shape = 21) +
   geom_ribbon(data = bind_rows(sac_pred), aes(x = time, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
                                               fill = method), alpha = 0.4) +
   geom_line(data = bind_rows(sac_pred), aes(x = time, y = fit, group = interaction(site_ID, method),
