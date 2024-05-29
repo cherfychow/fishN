@@ -78,6 +78,7 @@ detach('package:rfishbase')
 rm(dt_LL, dt_LW)
 dt_metrics$SSB <- dt_metrics$SSB / 1000 # in kilograms
 
+
 # dt_traits <- read.csv('../data/traits_manual.csv', header = T) %>% select(Species, Schooling, RemarksRefs) %>% 
 #   right_join(., dt_LW, by="Species") %>% arrange(Species)
 
@@ -122,18 +123,25 @@ dt_metrics$q2upr <- sapply(hill, function(x) x$iNextEst$size_based %>% filter(m 
 dt_metrics <- dt_metrics[c(1:5,8,9)] %>% tidyr::pivot_longer(cols = -(1:2), names_to = "metrics", values_to = "value") %>% 
   left_join(., dt_metrics[c(1,2,6,7,10:13)] %>% tidyr::pivot_longer(cols = -(1:2), names_pattern = "^(.*)(lwr|upr)$", names_to = c("metrics", ".value")), by = c("site_ID", "method", "metrics"))
 
+# standardise SSB
+dt_metrics$value[which(dt_metrics$method == 'UVC' & dt_metrics$metrics == 'SSB')] <- dt_metrics$value[which(dt_metrics$method == 'UVC' & dt_metrics$metrics == 'SSB')] / 1.963495
+
+dt_metrics$value[which(dt_metrics$method != 'UVC' & dt_metrics$metrics == 'SSB')] <- dt_metrics$value[which(dt_metrics$method != 'UVC' & dt_metrics$metrics == 'SSB')] / 2.5
+
 f_metrics <- as.list(rep('', 5))
 for (i in 1:n_distinct(dt_metrics$metrics)) {
   f_metrics[[i]] <- ggplot(dt_metrics %>% filter(metrics == dt_metrics$metrics[i])) +
-    geom_pointrange(aes(x = site_ID, y = value, ymin = lwr, ymax = upr, shape = method, fill = method)) +
+    geom_errorbar(aes(x = site_ID, ymin = lwr, ymax = upr, color = method), size = 0.5, width = 0.2) +
+    geom_point(aes(x = site_ID, y = value, shape = method, fill = method), size = 2) +
     scale_fill_cherulean(palette = 'gomphosus', discrete = T) + looks +
+    scale_color_cherulean(palette = 'gomphosus', discrete = T) +
     scale_shape_manual(values = 21:23) +
     scale_x_discrete(labels = c("HH", "HK", "SP")) +
     labs(x = '', y = dt_metrics$metrics[i])
 }
 
 f_metrics[[3]] <- f_metrics[[3]] + scale_y_log10()
-f_metrics[[1]] <- f_metrics[[1]] + labs(y = 'SSB (kg)', x = '')
+f_metrics[[1]] <- f_metrics[[1]] + labs(y = 'SSB (kg / 100 m2)', x = '')
 
 ((f_metrics[[1]] + f_metrics[[2]] + f_metrics[[3]]) / (f_metrics[[4]] + f_metrics[[5]] + f_metrics[[1]])) + plot_layout(guides = "collect")
 

@@ -24,6 +24,8 @@ looks <- theme_classic(base_size = 13) +
 # dt_rest <- read.csv('../outputs/REST_output.csv', header = T)
 dt_maxn <- read.csv('../data/data_maxn.csv', header = T)
 dt_uvc <- read.csv('../data/uvc_himb.csv', header = T)
+dt_uvc <- dt_uvc %>% filter(str_detect(site_ID, 'hinalea|kaku|sunset'))
+dt_uvc <- dt_uvc[-which(dt_uvc$site_ID == 'sunset_point' & dt_uvc$Day == 30), ] # only keep the sunset point transect on the 24th
 # dt_rest <- rest_output
 # 
 # rm(rest_output, rest_sp)
@@ -49,7 +51,7 @@ dt_allmethods <- dt_maxn %>% group_by(site_ID, Taxon, Size_class) %>% summarise(
   full_join(., dt_rest[-5], by = c('site_ID', 'Taxon', 'Size_class')) %>% 
   rename(., REST = D)
 dt_allmethods <- dt_uvc %>% group_by(site_ID, Taxon, Size_class) %>% 
-  summarise(UVC = sum(count)) %>% ungroup() %>% filter(str_detect(site_ID, 'kaku|hinalea|sunset')) %>% 
+  summarise(UVC = sum(count)) %>% ungroup() %>% 
   full_join(., dt_allmethods, by = c('site_ID', 'Taxon', 'Size_class'))
 
 # replace NAs with 0s
@@ -173,17 +175,17 @@ convhull_cam[[2]] <- bind_rows(convhull_cam[[2]])
 f_pcoacam <- as.list(rep(NA,2))
 f_pcoacam[[1]] <- ggplot(data = dt_maxnpcoa) +
   geom_polygon(data = convhull_cam[[1]], 
-               aes(x = Axis.1, y = Axis.2, fill = site_ID)) +
-  geom_point(aes(x = Axis.1, y = Axis.2, fill = site_ID), size = 3, shape = 21) +
+               aes(x = Axis.1, y = Axis.2, color = site_ID), fill = 'transparent') +
+  geom_point(aes(x = Axis.1, y = Axis.2, color = site_ID), size = 3, shape = 21) +
   looks + labs(x = "PCo1", y = "PCo2")+
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = 'Site')
+  scale_color_cherulean(palette = "cheridis", discrete = T, name = 'Site')
 
 f_pcoacam[[2]] <- ggplot(data = dt_maxnpcoa) +
   geom_polygon(data = convhull_cam[[2]],
-               aes(x = Axis.3, y = Axis.4, fill = site_ID)) +
-  geom_point(aes(x = Axis.3, y = Axis.4, fill = site_ID), size = 3, shape = 21) +
+               aes(x = Axis.3, y = Axis.4, colour = site_ID), fill = 'transparent') +
+  geom_point(aes(x = Axis.3, y = Axis.4, colour = site_ID), size = 3, shape = 21) +
   looks + labs(x = "PCo3", y = "PCo4")+
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = 'Site')
+  scale_colour_cherulean(palette = "cheridis", discrete = T, name = 'Site')
 
 
 rm(pcoa_maxn, pcoa_nmatrix_cam)
@@ -355,33 +357,33 @@ rm(cameras, ncam, seq)
 
 ## Calculate cumulative species richness over time
 # make a dataframe to populate species accumulation per timestamp
-SAC <- dt_ruv %>% mutate(site_cam = paste(site_ID, Camera, sep = "_")) %>% 
+SAC_cam <- dt_ruv %>% mutate(site_cam = paste(site_ID, Camera, sep = "_")) %>% 
   select(site_ID, site_cam, SACentry)  # matches the row index of dt_ruv
 
 # make the SAC times relative to the time of first observation
 for (i in 1:11) {
-  time1 <- SAC$SACentry[which(SAC$site_cam == unique(SAC$site_cam)[i])[1]]
-  for (j in which(SAC$site_cam == unique(SAC$site_cam)[i])) {
-    SAC$SACentry[j] <- SAC$SACentry[j] - time1 # take every time stamp and subtract time1 from it
+  time1 <- SAC_cam$SACentry[which(SAC_cam$site_cam == unique(SAC_cam$site_cam)[i])[1]]
+  for (j in which(SAC_cam$site_cam == unique(SAC_cam$site_cam)[i])) {
+    SAC_cam$SACentry[j] <- SAC_cam$SACentry[j] - time1 # take every time stamp and subtract time1 from it
   }
 }
 rm(time1)
 
-SAC$spN <- NA
+SAC_cam$spN <- NA
 # for every row at every site-camera, calculate the species number accumulation through time
 for (i in 1:11) {
-  rows = seq(which(SAC$site_cam == unique(SAC$site_cam)[i])[1], max(which(SAC$site_cam == unique(SAC$site_cam)[i])), by = 3)
+  rows = seq(which(SAC_cam$site_cam == unique(SAC_cam$site_cam)[i])[1], max(which(SAC_cam$site_cam == unique(SAC_cam$site_cam)[i])), by = 3)
   for (j in rows) {
     if (j == rows[1]) { # the first row from each site represents the first species record, so these will always start at 1
-      SAC$spN[j] <- 1
+      SAC_cam$spN[j] <- 1
     }
     else {
-      SAC$spN[j] <- dt_ruv$Taxon[rows[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
+      SAC_cam$spN[j] <- dt_ruv$Taxon[rows[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
     }
   }
 }
-SAC <- SAC %>% filter(!is.na(spN))
-SAC$method <- 'MaxN_cameras'
+SAC_cam <- SAC_cam %>% filter(!is.na(spN))
+SAC_cam$method <- 'MaxN_cameras'
 
 # do again, filtering out the species that REST didn't have
 SAC2 <- dt_ruv %>% mutate(site_cam = paste(site_ID, Camera, sep = "_"), site_sp = paste(site_ID, Taxon, sep = "_")) %>% 
@@ -414,46 +416,45 @@ for (i in 1:11) {
 
 # merge + cleanup
 SAC2$method <- 'REST_cameras'
-SAC <- bind_rows(SAC, SAC2)
+SAC_cam <- bind_rows(SAC_cam, SAC2)
 rm(SAC2, rows)
-SAC <- SAC %>% filter(!is.na(spN))
-SAC$site_sp <- NULL
-SAC$time <- SAC$SACentry / 60 # to minutes
-SAC$SACentry <- NULL
+SAC_cam <- SAC_cam %>% filter(!is.na(spN))
+SAC_cam$site_sp <- NULL
+SAC_cam$time <- SAC_cam$SACentry / 60 # to minutes
+SAC_cam$SACentry <- NULL
 
-# generate accumulation for all site cameras
-SAC2 <- dt_ruv %>% mutate(site_cam = paste(site_ID, Camera, sep = "_"), site_sp = paste(site_ID, Taxon, sep = "_")) %>% 
+# SITE AGGREGATED
+SAC <- dt_ruv %>% mutate(site_cam = paste(site_ID, Camera, sep = "_"), site_sp = paste(site_ID, Taxon, sep = "_")) %>% 
   filter(site_sp %in% with(dt_rest %>% filter(!is.na(D)), paste(site_ID, Taxon, sep="_"))) %>% 
   select(site_ID, site_cam, site_sp, SACentry)  # matches the row index of dt_ruv
 
 # make the SAC times relative to the time of first observation
 for (i in 1:11) {
-  time1 <- SAC2$SACentry[which(SAC2$site_cam == unique(SAC2$site_cam)[i])[1]]
-  for (j in which(SAC2$site_cam == unique(SAC2$site_cam)[i])) {
-    SAC2$SACentry[j] <- SAC2$SACentry[j] - time1 # take every time stamp and subtract time1 from it
+  time1 <- SAC$SACentry[which(SAC$site_cam == unique(SAC$site_cam)[i])[1]]
+  for (j in which(SAC$site_cam == unique(SAC$site_cam)[i])) {
+    SAC$SACentry[j] <- SAC$SACentry[j] - time1 # take every time stamp and subtract time1 from it
   }
 }
 rm(time1)
 
-SAC2$spN <- NA
-SAC2 <- SAC2 %>% select(!site_cam) %>% mutate(time = round(SACentry/60, digits = 1)) %>% 
+SAC$spN <- NA
+SAC <- SAC %>% select(!site_cam) %>% mutate(time = round(SACentry/60, digits = 1)) %>% 
   arrange(site_ID, time)
-SAC2 <- SAC2 %>% distinct(site_ID, time, site_sp, spN)
+SAC <- SAC %>% distinct(site_ID, time, site_sp, spN)
 # for every row at every site-camera, calculate the species number accumulation through time
 for (i in 1:3) {
-  rows = which(SAC2$site_ID == unique(SAC2$site_ID)[i])
+  rows = which(SAC$site_ID == unique(SAC$site_ID)[i])
   for (j in rows) {
     if (j == rows[1]) { # the first row from each site represents the first species record, so these will always start at 1
-      SAC2$spN[j] <- 1
+      SAC$spN[j] <- 1
     }
     else {
-      SAC2$spN[j] <- SAC2$site_sp[rows[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
+      SAC$spN[j] <- SAC$site_sp[rows[1]:j] %>% n_distinct # number of unique species from the first row of the site to row j
     }
   }
 }
 
-SAC2 <- SAC2 %>% group_by(site_ID, time) %>% summarise(spN = max(spN)) %>% mutate(method = 'REST')
-SAC <- bind_rows(SAC, SAC2) # merge in the site-aggregate REST
+SAC <- SAC %>% group_by(site_ID, time) %>% summarise(spN = max(spN)) %>% mutate(method = 'REST')
 
 # now do the same for MaxN
 SAC2 <- dt_ruv %>% mutate(site_cam = paste(site_ID, Camera, sep = "_")) %>% # camera level time stamps are still relevant at this point
@@ -489,7 +490,7 @@ SAC2 <- SAC2 %>% group_by(site_ID, time) %>% summarise(spN = max(spN)) %>% mutat
 SAC <- bind_rows(SAC, SAC2) # merge in
 
 # Add UVC accumulation
-temp <- dt_uvc %>% filter(str_detect(site_ID, 'hinalea|kaku|sunset'))  %>% 
+temp <- dt_uvc %>% 
   select(site_ID, transect_point, Taxon) %>% arrange(site_ID, transect_point)
 temp$spN <- NA # calculate cumulative S
 for (i in 1:3) { # for each site
@@ -510,11 +511,10 @@ SAC <- temp %>% group_by(site_ID, transect_point) %>% summarise(spN = max(spN)) 
   bind_rows(., SAC)
 
 sac_fit <- as.list(rep(NA, 9))
-tempSAC <-  SAC %>% filter(str_detect(method, 'cameras') == F) %>% select(!site_cam)
 for (i in 1:3) {
   for (j in 1:3) {
-    sac_fit[[i + (j-1)*3]] <- nls(data = tempSAC %>% 
-                                     filter(site_ID == unique(tempSAC$site_ID)[i], method == unique(tempSAC$method)[j]),
+    sac_fit[[i + (j-1)*3]] <- nls(data = SAC %>% 
+                                     filter(site_ID == unique(SAC$site_ID)[i], method == unique(SAC$method)[j]),
                          formula = spN ~ a - ((a-b)*exp(-c*time)),
                          start = list(a = 11, b = 1, c = 0.1))
   }
@@ -529,7 +529,7 @@ for (i in 1:3) {
       nlsBoot(sac_fit[[i + (j-1)*3]], niter=500), 
       newdata = newx, interval = "confidence") %>% as.data.frame
     colnames(sac_pred[[i + (j-1)*3]]) <- c('fit', 'lwr', 'upr')
-    sac_pred[[i + (j-1)*3]] <- data.frame(site_ID = unique(tempSAC$site_ID)[i], method = unique(tempSAC$method)[j],
+    sac_pred[[i + (j-1)*3]] <- data.frame(site_ID = unique(SAC$site_ID)[i], method = unique(SAC$method)[j],
                                  time = newx) %>% bind_cols(., sac_pred[[i + (j-1)*3]])
   }
 }
@@ -537,8 +537,8 @@ for (i in 1:3) {
 
 
 f_SAC <- ggplot() +
-  geom_point(data = tempSAC %>% filter(method != 'UVC'), aes(x = time, y = spN, color = method), shape = 21, alpha = 0.1) +
-  geom_point(data = tempSAC %>% filter(method == 'UVC'), aes(x = time, y = spN, color = method), shape = 21) +
+  geom_point(data = SAC %>% filter(method != 'UVC'), aes(x = time, y = spN, color = method), shape = 21, alpha = 0.1) +
+  geom_point(data = SAC %>% filter(method == 'UVC'), aes(x = time, y = spN, color = method), shape = 21) +
   geom_ribbon(data = bind_rows(sac_pred), aes(x = time, ymin = lwr, ymax = upr, group = interaction(site_ID, method),
                                               fill = method), alpha = 0.4) +
   geom_line(data = bind_rows(sac_pred), aes(x = time, y = fit, group = interaction(site_ID, method),
