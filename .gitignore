@@ -5,8 +5,12 @@
 # pre-cleaning data files
 data/notcleaned/
 
-# ignore outputs
+# ignore
 outputs/
+explore.Rmd
+explore.html
+f_rest.R
+slideplots.R
 
 # History files
 .Rhistory
