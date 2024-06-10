@@ -7,10 +7,10 @@ data/notcleaned/
 
 # ignore
 outputs/
-explore.Rmd
-explore.html
-f_rest.R
-slideplots.R
+R/explore.Rmd
+R/explore.html
+R/f_rest.R
+R/slideplots.R
 
 # History files
 .Rhistory
