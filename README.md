@@ -13,20 +13,21 @@ This repository contains the data and code used for the analysis and figure gene
 
 ## Requirements
 All files were written in R 4.3.3. We recommend executing the repository using this version along with the relevant versions of the packages below.  
-**Package dependencies:**  
-The package dependencies are declared in each file as `require(package name here)`
 
-    - `ape` (5.7.1)
-    - `beepr` (1.3)
-    - `ggdist` (3.2.0)
-    - `iNEXT` (3.0.1)
-    - `nlstools` (2.0.0)
-    - `patchwork` (1.1.2)
-    - `rfishbase` (4.0.0)
-    - `SpadeR` (0.1.1)
-    - `tidyverse` (2.0.0)
-    - `vegan` (2.6.4)
-    - `worrms` (0.4.3)
+**Package dependencies:**  
+The package dependencies are declared in each file as `require(package name here)`  
+
+- `ape` (5.7.1)
+- `beepr` (1.3)
+- `ggdist` (3.2.0)
+- `iNEXT` (3.0.1)
+- `nlstools` (2.0.0)
+- `patchwork` (1.1.2)
+- `rfishbase` (4.0.0)
+- `SpadeR` (0.1.1)
+- `tidyverse` (2.0.0)
+- `vegan` (2.6.4)
+- `worrms` (0.4.3)
 
 ## Repository structure
 **`data`** : all the data files needed to replicate the analysis workflow  
