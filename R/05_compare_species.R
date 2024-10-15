@@ -17,17 +17,15 @@ source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067
 
 set.seed(24)
 looks <- theme_classic(base_size = 13) + 
-  theme(panel.grid = element_blank(), axis.ticks = element_line(linewidth = .75), axis.line = element_line(linewidth = .75))
+  theme(panel.grid = element_blank(), 
+        axis.ticks = element_line(linewidth = .35),
+        axis.line = element_line(linewidth = .35))
 
 # load files generated from previous analyses 
 # assumes dt_ruv is already in the environment from REST fitting
 # dt_rest <- read.csv('../outputs/REST_output.csv', header = T)
-dt_maxn <- read.csv('../data/data_maxn.csv', header = T)
+dt_maxn <- read.csv('../data/data_maxn_1s.csv', header = T)
 dt_uvc <- read.csv('../data/uvc_himb.csv', header = T)
-dt_uvc <- dt_uvc %>% filter(str_detect(site_ID, 'hinalea|kaku|sunset'))
-dt_uvc <- dt_uvc[-which(dt_uvc$site_ID == 'sunset_point' & dt_uvc$Day == 30), ] # only keep the sunset point transect on the 24th
-# dt_rest <- rest_output
-# 
 # rm(rest_output, rest_sp)
 
 # Prep data structure
@@ -48,7 +46,7 @@ dt_rest <- dt_rest %>% select(site_ID, Taxon, Size_class, pred) %>%
 # each row/record an observed species-size class
 
 dt_allmethods <- dt_maxn %>% group_by(site_ID, Taxon, Size_class) %>% summarise(MaxN = sum(MaxN)) %>% 
-  full_join(., dt_rest[-5], by = c('site_ID', 'Taxon', 'Size_class')) %>% 
+  full_join(., dt_rest %>% select(!spsize), by = c('site_ID', 'Taxon', 'Size_class')) %>% 
   rename(., REST = D)
 dt_allmethods <- dt_uvc %>% group_by(site_ID, Taxon, Size_class) %>% 
   summarise(UVC = sum(count)) %>% ungroup() %>% 
@@ -201,16 +199,21 @@ dt_all_long %>% group_by(method, site_ID, Taxon) %>% summarise(n = sum(n)) %>% #
 
 # not splitting by site
 temp <- dt_allmethods %>% group_by(Taxon) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))
-n_distinct(temp$Taxon)
+n_distinct(dt_all_long$Taxon)
 
 # EXCLUSIVES
 temp %>% filter(MaxN == 0 & UVC > 0) %>% pull(Taxon) %>% n_distinct #UVC
 temp %>% filter(UVC == 0 & MaxN > 0) %>% pull(Taxon) %>% n_distinct # video
+
 # overlaps, video uvc
-temp %>% filter(MaxN > 0, UVC > 0) %>% pull(Taxon) %>% n_distinct
 temp %>% filter(MaxN > 0, UVC > 0) %>% pull(Taxon) %>% n_distinct
 
 temp <- dt_allmethods %>% group_by(Taxon, site_ID) %>% summarise(UVC = sum(UVC), REST = sum(REST), MaxN = sum(MaxN))
+
+temp %>% group_by(site_ID) %>%
+  filter(MaxN == 0 & UVC > 0) %>% summarise(Sexclusive = n_distinct(Taxon)) #UVC
+temp %>% group_by(site_ID) %>%
+  filter(UVC == 0 & MaxN > 0) %>% summarise(Sexclusive = n_distinct(Taxon)) # video
 
 # overlaps
 temp %>% filter(UVC > 0 & MaxN > 0) %>% group_by(site_ID) %>% 
@@ -329,7 +332,7 @@ f_rarefaction <- ggplot() +
 cameras <- dt_ruv %>% distinct(site_ID, Camera, VidFile)
 ncam <- cameras %>% group_by(site_ID, Camera) %>% summarise(ncam = n_distinct(VidFile)) %>% pull(ncam)
 seq <- ''
-  for (i in 1:length(ncam)) {
+for (i in 1:length(ncam)) {
     seq <- c(seq, 1:ncam[i])
   } # generate a sequence vector to identify the nominal order of video files
 seq <- seq[-1] # trim that dummy start
@@ -554,10 +557,10 @@ rm(sac_fit, rar_fit, newx, temp, dis_maxn, i, j, pretty)
 
 # Print figures -----------------------------------------------------------
 
-(f_relpcoa1 / f_pcoa1) + plot_layout(guides = "collect")
+(f_relpcoa1 / f_pcoa1)* theme(legend.position = 'none') + plot_layout(guides = "collect") 
 (f_pcoacam[[1]]|f_pcoacam[[2]]) + plot_layout(guides = "collect")
 f_SAC * theme(legend.position = 'bottom')
 f_rarefaction
 
 ((f_SAD + theme(legend.position = 'none')) / f_SAC / f_rarefaction)
-ggsave('../outputs/figures/fig2a-c.pdf', width = 140, height = 180, units = 'mm')
+ggsave('../../figures/fig2abc.pdf', width = 140, height = 180, units = 'mm')

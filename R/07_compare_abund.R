@@ -11,7 +11,10 @@ require(ggplot2)
 require(patchwork)
 source('https://gist.githubusercontent.com/cherfychow/e9ae890fd16f4c86730748c067feee2b/raw/b2db138ab8164c237129308ea643de78cd54b252/cherulean.R')
 
-looks <- theme_classic(base_size = 13) + theme(panel.grid = element_blank(), axis.line = element_line(linewidth = .5), axis.ticks = element_line(linewidth = .5))
+looks <- theme_classic(base_size = 13) + 
+  theme(panel.grid = element_blank(), 
+  axis.line = element_line(linewidth = .35), 
+  axis.ticks = element_line(linewidth = .35))
 
 
 # PAIRWISE ABUNDANCE COMPARISONS --------------------------------------------
@@ -217,10 +220,11 @@ f_size <- ggplot(sizespec) +
 # Print figures -----------------------------------------------------------
 
 (f_abundpair[[1]] + f_abundpair[[2]] + f_abundpair[[3]]) * looks * theme(legend.position = "none")
-ggsave('../outputs/figures/fig_abundmethod.pdf', width = 7, height = 2.2, units = "in")
+ggsave('../../MEE/resubmission/figures/fig_abundmethod.pdf', width = 18, height = 6.5, units = "cm")
 (f_abundsoc[[1]] + f_abundsoc[[2]] + f_abundsoc[[3]]) * looks * scale_x_continuous(breaks = c(1:5)) * coord_cartesian(xlim = c(0.5,5.7), ylim = c(0,4.75), clip = 'off') + plot_layout(guides = "collect")
-ggsave('../outputs/figures/fig_aggregation.pdf', width = 7, height = 2.2, units = "in")
+ggsave('../../MEE/resubmission/figures/fig_aggregation.pdf', width = 18, height = 6.5, units = "cm")
 f_effects + theme(legend.position = 'bottom')
+ggsave('../../MEE/resubmission/figures/fig_effects.pdf', width = 8, height = 8, units = "cm")
 f_size
-ggsave(plot = f_size, '../outputs/figures/fig_size.pdf', width = 7, height = 2, units = "in")
+ggsave(plot = f_size, '../../MEE/resubmission/figures/fig_size.pdf', width = 18, height = 6.5, units = "cm")
 rm(traits, totals, temp, newx)
