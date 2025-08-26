@@ -3,8 +3,8 @@
 # Abundance estimate comparisons
 
 require(dplyr)
-require(lubridate)
 require(beepr)
+require(glmmTMB)
 
 require(stringr)
 require(ggplot2)
@@ -38,7 +38,6 @@ looks <- theme_classic(base_size = 13) +
 #               shape = 21, alpha = 0.6, size = 2) +
 #   looks + scale_fill_cherulean(palette = "cheridis", discrete = T, reverse = T)
 
-
 ## Fit GLMs --------------------------------------------
 
 set.seed(240)
@@ -53,125 +52,139 @@ dt_abund <- left_join(dt_allmethods, traits, by = "Taxon")
 
 model_abund <- as.list(rep('', 6))
 # MaxN ~ REST
-model_abund[[1]] <- lm(log(MaxN + 1) ~ log(REST + 1), data = dt_abund)
+model_abund[[1]] <- glmmTMB(REST ~ log(MaxN + 1) + (1|site_ID), data = dt_abund, 
+  family = ziGamma(link = 'log'), ziformula = ~log(MaxN + 1))
 # UVC ~ REST
-model_abund[[2]] <- lm(log(UVC + 1) ~ log(REST + 1), data = dt_abund)
+model_abund[[2]] <- glmmTMB(UVC ~ log(REST + 1) + (1|site_ID), data = dt_abund,
+  family = truncated_poisson(link = 'log'), ziformula = ~log(REST + 1))
 # MaxN ~ UVC
-model_abund[[3]] <- lm(log(MaxN + 1) ~ log(UVC + 1), data = dt_abund)
+model_abund[[3]] <- glmmTMB(MaxN ~ log(UVC + 1) + (1|site_ID), data = dt_abund,
+  family = truncated_poisson(link = 'log'), ziformula = ~log(UVC + 1))
 
 # candidates with aggregation
-model_abund[[4]] <- lm(log(MaxN + 1) ~ log(REST + 1) + Group, data = dt_abund)
+model_abund[[4]] <- glmmTMB(REST ~ log(MaxN + 1) + Group + (1|site_ID), data = dt_abund, 
+  family = ziGamma(link = 'log'), ziformula = ~log(MaxN + 1))
 # UVC ~ REST
-model_abund[[5]] <- lm(log(UVC + 1) ~ log(REST + 1) + Group, data = dt_abund)
+model_abund[[5]] <- glmmTMB(UVC ~ log(REST + 1) + Group + (1|site_ID), data = dt_abund,
+  family = truncated_poisson(link = 'log'), ziformula = ~log(REST + 1))
 # MaxN ~ UVC
-model_abund[[6]] <- lm(log(MaxN + 1) ~ log(UVC + 1) + Group, data = dt_abund)
+model_abund[[6]] <- glmmTMB(MaxN ~ log(UVC + 1) + Group+ (1|site_ID), data = dt_abund,
+  family = truncated_poisson(link = 'log'), ziformula = ~log(UVC + 1))
 
-summary(model_abund[[4]])
-summary(model_abund[[5]])
-summary(model_abund[[6]])
+require(performance)
 
 sapply(model_abund, AIC)[c(1,4,2,5,3,6)] # look at AICs
 # aggregation is consistently lower
+# 1, 5, 6 
 
 # model prediction
 # make a standard new x that will be used by all models, with aggregation held at a mean
 social <- mean(dt_abund$Group)
 newx <- data.frame(REST = seq(min(dt_abund$REST), max(dt_abund$REST), length.out = 50), 
                    UVC = seq(min(dt_abund$UVC), max(dt_abund$UVC), length.out = 50), 
+                   MaxN = seq(min(dt_abund$MaxN), max(dt_abund$MaxN), length.out = 50), 
                    Group = social)
 abund_pred <- as.list(rep('', 3))
+selected = c(1,5,6)
 for (i in 1:3) { # each model
-  abund_pred[[i]] <- predict(model_abund[[i+3]], newdata = newx, se.fit = T)
+  abund_pred[[i]] <- predict(model_abund[[selected[i]]], newdata = newx, se.fit = T, 
+    type = 'response', re.form = NA)
   abund_pred[[i]] <- with(abund_pred[[i]], data.frame(fitted = fit, lwr = fit - 1.96 * se.fit, 
                                                   upr = fit + 1.96 * se.fit))
 }
 # add newx to the prediction data frame
-abund_pred[[1]] <- abund_pred[[1]] %>% bind_cols(newx %>% select(REST, Group))
+abund_pred[[1]] <- abund_pred[[1]] %>% bind_cols(newx %>% select(MaxN))
 abund_pred[[2]] <- abund_pred[[2]] %>% bind_cols(newx %>% select(REST, Group))
 abund_pred[[3]] <- abund_pred[[3]] %>% bind_cols(newx %>% select(UVC, Group))
 
 # partial regression plots for observed abundances (no aggregation yet)
 f_abundpair <- as.list(rep('', 3))
 f_abundpair[[1]] <- ggplot(dt_abund) +
-  geom_jitter(aes(y = log(MaxN + 1), x = log(REST + 1), fill = Size_class), width = 0.05, height = 0.05, 
-              alpha = 0.6, size = 2, shape = 21) +
+  geom_point(aes(x = MaxN , y = REST , fill = Size_class), 
+    alpha = 0.6, size = 2, shape = 21) +
   geom_ribbon(data = abund_pred[[1]], 
-              aes(x = log(REST + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
-  geom_line(data = abund_pred[[1]], aes(x = log(REST + 1), y = fitted)) +
-  labs(x = 'log(REST)', y = 'log(MaxN)') +
-  coord_cartesian(ylim = c(0,4.75)) +
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
+              aes(x = MaxN , ymin = lwr, ymax = upr), linetype = 'dashed', 
+              color = 'black', linewidth= 0.5, fill = 'transparent') +
+  geom_line(data = abund_pred[[1]], aes(x = MaxN , y = fitted)) +
+  labs(y = 'REST', x = 'MaxN') +
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)") +
+  scale_x_log10() + scale_y_log10()
 
 # REST - UVC
-f_abundpair[[2]] <- ggplot(dt_allmethods) +
-  geom_jitter(aes(y = log(UVC + 1), x = log(REST + 1), fill = Size_class), width = 0.05, height = 0.05, 
+f_abundpair[[2]] <- ggplot(dt_abund) +
+  geom_point(aes(y = UVC , x = REST, fill = Size_class), 
               alpha = 0.6, size = 2, shape =21) +
-  geom_ribbon(data = abund_pred[[2]], aes(x = log(REST + 1), ymin = lwr, ymax = upr), 
+  geom_ribbon(data = abund_pred[[2]], aes(x = REST, ymin = lwr, ymax = upr), 
               linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
-  geom_line(data = abund_pred[[2]], aes(x = log(REST + 1), y = fitted)) +
-  labs(x = 'log(REST)', y = 'log(UVC)') +
-  coord_cartesian(ylim = c(0,4.75)) +
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
+  geom_line(data = abund_pred[[2]], aes(x = REST, y = fitted)) +
+  labs(x = 'REST', y = 'UVC') +
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")+
+  scale_x_log10() + scale_y_log10()
 
 # UVC - MaxN
-f_abundpair[[3]] <- ggplot(dt_allmethods) +
-  geom_jitter(aes(y = log(MaxN + 1), x = log(UVC + 1), fill = Size_class), width = 0.05, height = 0.05, 
+f_abundpair[[3]] <- ggplot(dt_abund) +
+  geom_point(aes(y = MaxN , x = UVC , fill = Size_class),  
               alpha = 0.6, size = 2, shape = 21) +
   geom_ribbon(data = abund_pred[[3]], 
-              aes(x = log(UVC + 1), ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
-  geom_line(data = abund_pred[[3]], aes(x = log(UVC + 1), y = fitted)) +
-  labs(x = 'log(UVC)', y = 'log(MaxN)')+
-  coord_cartesian(ylim = c(0,4.75)) +
-  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")
+              aes(x = UVC, ymin = lwr, ymax = upr), linetype = 'dashed', color = 'black', linewidth= 0.5, fill = 'transparent') +
+  geom_line(data = abund_pred[[3]], aes(x = UVC, y = fitted)) +
+  labs(x = 'UVC', y = 'MaxN')+
+  scale_fill_cherulean(palette = "cheridis", discrete = T, name = "Size class (cm)")+
+  scale_x_log10() + scale_y_log10()
 
 # partial regression plots for partial aggregation effects
 # generate partial predictions for aggregation, held at abundance mean
 meanREST <- mean(dt_abund$REST)
 meanPoint <- mean(dt_abund$UVC)
 newx <- data.frame(Group = 1:5, REST = meanREST, UVC = meanPoint)
-for (i in 4:6) { # each model
-  abund_pred[[i]] <- predict(model_abund[[i]], newdata = newx, se.fit = T)
-  abund_pred[[i]] <- with(abund_pred[[i]], data.frame(fitted = fit, lwr = fit - 1.96 * se.fit, 
+for (i in 2:3) { # each model
+  abund_pred[[i+2]] <- predict(model_abund[[selected[i]]], newdata = newx, se.fit = T, re.form = NA, type = 'response')
+  abund_pred[[i+2]] <- with(abund_pred[[i+2]], data.frame(fitted = fit, lwr = fit - 1.96 * se.fit, 
                                                   upr = fit + 1.96 * se.fit,
                                                   Group = newx$Group))
 }
 
-f_abundsoc <- as.list(rep('', 3))
+f_abundsoc <- as.list(rep('', 2))
 
 f_abundsoc[[1]] <- ggplot(dt_abund) +
-  geom_point(aes(x = Group, y = log(MaxN + 1)), size = 1, alpha = .4, shape = 21, color = 'grey30', 
+  geom_point(aes(x = Group, y = UVC), size = 1, alpha = .4, shape = 21, color = 'grey20', 
              fill = 'white', position = position_jitter(width = .1)) +
   geom_errorbar(data = abund_pred[[4]], aes(x = Group + 0.25, ymin = lwr, ymax = upr), 
                 color = 'grey20', width = 0.2) +
   geom_point(data = abund_pred[[4]], aes(x = Group + 0.25, y = fitted), 
              color = 'grey20', size = 2.5) +
-  labs(x = 'Aggregation', y = 'log(MaxN)')
+  labs(x = 'Aggregation', y = 'UVC') + scale_y_log10()
 
 f_abundsoc[[2]] <- ggplot(dt_abund) +
-  geom_point(aes(x = Group, y = log(UVC + 1)), size = 1, alpha = .4, shape = 21, color = 'grey20', 
+  geom_point(aes(x = Group, y = MaxN), size = 1, alpha = .4, shape = 21, color = 'grey20', 
              fill = 'white', position = position_jitter(width = .1)) +
   geom_errorbar(data = abund_pred[[5]], aes(x = Group + 0.25, ymin = lwr, ymax = upr), 
                 color = 'grey20', width = 0.2) +
   geom_point(data = abund_pred[[5]], aes(x = Group + 0.25, y = fitted), 
              color = 'grey20', size = 2.5) +
-  labs(x = 'Aggregation', y = 'log(UVC)')
-
-f_abundsoc[[3]] <- ggplot(dt_abund) +
-  geom_point(aes(x = Group, y = log(MaxN + 1)), size = 1, alpha = .4, shape = 21, color = 'grey20', 
-             fill = 'white', position = position_jitter(width = .1)) +
-  geom_errorbar(data = abund_pred[[6]], aes(x = Group + 0.25, ymin = lwr, ymax = upr), 
-                color = 'grey20', width = 0.2) +
-  geom_point(data = abund_pred[[6]], aes(x = Group + 0.25, y = fitted), 
-             color = 'grey20', size = 2.5) +
-  labs(x = 'Aggregation', y = 'log(MaxN)')
+  labs(x = 'Aggregation', y = 'MaxN') + scale_y_log10()
 
 
 ## Model effects figure ----------------------------------------------------
 
-pair_effects <- data.frame(model = rep(c('MaxN ~ REST', 'UVC ~ REST', 'MaxN ~ UVC'), each = 2), 
-                           par = rep(c('method', 'aggregation'), 3), 
-                           estimate = sapply(model_abund[c(4:6)], FUN = function (x) {coefficients(x)[2:3]}, simplify = T) %>% as.vector, 
-                           se = sapply(model_abund[c(4:6)], FUN = function (x) {summary(x)$coefficients[-1,2]}, simplify = T) %>% as.vector)
+# method effect
+pair_effects <- data.frame(model = c('REST ~ MaxN', 'UVC ~ REST', 'MaxN ~ UVC'), 
+                           par = 'method', 
+                           estimate = sapply(model_abund[selected], FUN = function (x) {summary(x)$coefficients$cond[2,1]}, simplify = T) %>% as.vector, 
+                           se = sapply(model_abund[selected], FUN = function (x) {summary(x)$coefficients$cond[2,2]}, simplify = T) %>% as.vector)
+
+# Aggregation effect
+pair_effects <- data.frame(model = c('UVC ~ REST', 'MaxN ~ UVC'), 
+                           par = 'aggregation', 
+                           estimate = sapply(model_abund[c(5,6)], FUN = function (x) {summary(x)$coefficients$cond[3,1]}, simplify = T) %>% as.vector, 
+                           se = sapply(model_abund[c(5,6)], FUN = function (x) {summary(x)$coefficients$cond[3,2]}, simplify = T) %>% as.vector) %>%
+                bind_rows(pair_effects, .)
+
+# random intercept                          
+pair_effects <- data.frame(model = c('REST ~ MaxN', 'UVC ~ REST', 'MaxN ~ UVC'), 
+                           par = rep(c('(1|site)'), 3), 
+                           estimate = sapply(model_abund[selected], FUN = function (x) {summary(x)$varcor$cond$site_ID %>% attr(., "stddev")}, simplify = T) %>% as.vector) %>%
+                bind_rows(pair_effects, .)
 pair_effects$lwr <- with(pair_effects, estimate - 1.96 * se)
 pair_effects$upr <- with(pair_effects, estimate + 1.96 * se)
 
@@ -220,11 +233,11 @@ f_size <- ggplot(sizespec) +
 # Print figures -----------------------------------------------------------
 
 (f_abundpair[[1]] + f_abundpair[[2]] + f_abundpair[[3]]) * looks * theme(legend.position = "none")
-ggsave('../../MEE/resubmission/figures/fig_abundmethod.pdf', width = 18, height = 6.5, units = "cm")
-(f_abundsoc[[1]] + f_abundsoc[[2]] + f_abundsoc[[3]]) * looks * scale_x_continuous(breaks = c(1:5)) * coord_cartesian(xlim = c(0.5,5.7), ylim = c(0,4.75), clip = 'off') + plot_layout(guides = "collect")
-ggsave('../../MEE/resubmission/figures/fig_aggregation.pdf', width = 18, height = 6.5, units = "cm")
+ggsave('fig_abundmethod.pdf', width = 20, height = 6.5, units = "cm")
+(f_abundsoc[[1]] + f_abundsoc[[2]]) * looks * scale_x_continuous(breaks = c(1:5)) + plot_layout(guides = "collect")
+ggsave('fig_aggregation.pdf', width = 13, height = 6.5, units = "cm")
 f_effects + theme(legend.position = 'bottom')
-ggsave('../../MEE/resubmission/figures/fig_effects.pdf', width = 8, height = 8, units = "cm")
+ggsave('fig_effects.pdf', width = 8, height = 8, units = "cm")
 f_size
 ggsave(plot = f_size, '../../MEE/resubmission/figures/fig_size.pdf', width = 18, height = 6.5, units = "cm")
 rm(traits, totals, temp, newx)
