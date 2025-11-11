@@ -1,7 +1,6 @@
 
-# fishN
-### _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_ 
-_Methods in Ecology and Evolution_
+# _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_ 
+### _Methods in Ecology and Evolution_
 
 **Authors**: Cher F Y Chow, Viviana Brambilla, Garrett J Fundakowski, Joshua S Madin, Tiago A Marques, Nina M D Schiettekatte, Andrew S Hoey, Maria Dornelas
 
