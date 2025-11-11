@@ -6,7 +6,7 @@
 
 **Corresponding author**: Please direct any inquiries or questions to **Cher** via [Github](https://github.com/cherfychow) or [email](mailto:cher.fyc@gmail.com)    
   
-This repository contains the data and code used for the analysis and figure generation for _Random encounter modelling: a viable alternative to MaxN for estimating abundance of reef fish from remote underwater videos_. The project implements random encounter modelling with fish video timestamp data and compares it against UVC and MaxN surveys conducted at the same time. 
+This repository contains the data and code used for the analysis and figure generation for _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_. The project implements random encounter modelling with fish video timestamp data and compares it against UVC and MaxN surveys conducted at the same time, assessing method differences and overlaps in how they capture fish assemblage composition, abundance, and size structure.
   
 **Disclaimer**: The code may undergo revisions and changes following releases.
 
