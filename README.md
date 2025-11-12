@@ -2,7 +2,7 @@
 # fishN
 
 **Paper title**: _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_ in press  
-**Authors**: Cher F Y Chow, Viviana Brambilla, Garrett J Fundakowski, Joshua S Madin, Tiago A Marques, Nina M D Schiettekatte, Andrew S Hoey, Maria Dornelas
+**Authors**: Cher F Y Chow, Viviana Brambilla, Garrett J Fundakowski, Joshua S Madin, Tiago A Marques, Nina M D Schiettekatte, Andrew S Hoey, Maria Dornelas  
 **Corresponding author**: Please direct any inquiries or questions to **Cher** via [Github](https://github.com/cherfychow) or [email](mailto:cher.fyc@gmail.com)    
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17585060.svg)](https://doi.org/10.5281/zenodo.17585060)
   
