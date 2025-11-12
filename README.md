@@ -1,10 +1,10 @@
 
-# _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_ 
-### _Methods in Ecology and Evolution_
+# fishN
 
+**Paper title**: _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_ in press  
 **Authors**: Cher F Y Chow, Viviana Brambilla, Garrett J Fundakowski, Joshua S Madin, Tiago A Marques, Nina M D Schiettekatte, Andrew S Hoey, Maria Dornelas
-
 **Corresponding author**: Please direct any inquiries or questions to **Cher** via [Github](https://github.com/cherfychow) or [email](mailto:cher.fyc@gmail.com)    
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17585060.svg)](https://doi.org/10.5281/zenodo.17585060)
   
 This repository contains the data and code used for the analysis and figure generation for _Random encounter modelling as a viable method to estimate absolute abundance of reef fish_. The project implements random encounter modelling with fish video timestamp data and compares it against UVC and MaxN surveys conducted at the same time, assessing method differences and overlaps in how they capture fish assemblage composition, abundance, and size structure.
   
